@@ -115,6 +115,49 @@
   input[type=file]{display:none}
   .toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:50;background:var(--confirmed);color:#fff;padding:9px 16px;border-radius:9px;font-size:12.5px;font-weight:700;opacity:0;transition:opacity .25s;pointer-events:none}
   .toast.show{opacity:1}
+
+  /* ---- 自動配灯（Step B） ---- */
+  #stage.layout{cursor:crosshair}
+  .layoutrect{stroke:var(--amber);stroke-width:1.6;stroke-dasharray:6 4;fill:rgba(217,154,36,.06);vector-effect:non-scaling-stroke}
+  .roomrect{stroke:var(--amber);stroke-width:1.2;stroke-dasharray:4 4;fill:none;vector-effect:non-scaling-stroke;opacity:.45}
+  .roomlbl{fill:var(--amber);font-family:var(--mono);opacity:.6}
+  .ghost{opacity:.4;pointer-events:none}
+  #modal-layout{position:absolute;right:12px;top:12px;width:min(372px,94%);max-height:calc(100% - 24px);overflow-y:auto;z-index:12;
+    background:var(--panel2);border:1px solid var(--panel-line);border-radius:14px;padding:15px 16px 14px;color:var(--txt);box-shadow:0 10px 34px rgba(0,0,0,.5);display:none}
+  #modal-layout.show{display:block}
+  #modal-layout h4{margin:0 0 3px;font-size:15px}
+  #modal-layout .hint2{font-size:11px;color:var(--txt-dim);margin:0 0 12px;line-height:1.5}
+  #modal-layout .fld{margin-bottom:11px}
+  #modal-layout label{display:block;font-size:11px;color:var(--txt-dim);font-weight:700;margin-bottom:4px;letter-spacing:.02em}
+  #modal-layout select,#modal-layout input{width:100%;padding:8px 9px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;font-size:14px;font-family:var(--jp)}
+  #modal-layout input[type=number]{font-family:var(--mono)}
+  #modal-layout input:disabled{color:var(--txt-dim);background:#171a20}
+  .nxny{display:flex;gap:10px}
+  .nxny .fld{flex:1;margin-bottom:11px}
+  .stepper{display:flex;align-items:center;gap:7px}
+  .stepper button{flex:none;width:33px;height:34px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);font-size:18px;line-height:1;cursor:pointer}
+  .stepper button:hover{background:var(--panel3)}
+  .stepper input{text-align:center}
+  #layout-info{background:var(--panel);border:1px solid var(--panel-line);border-radius:9px;padding:9px 10px;font-size:12px;line-height:1.75;font-family:var(--mono);color:var(--txt-dim);margin-bottom:11px}
+  #layout-info b{color:#fff}
+  #layout-info .warn{color:var(--amber)}
+  details.lumen{border:1px solid var(--panel-line);border-radius:9px;margin-bottom:12px;background:var(--panel)}
+  details.lumen summary{cursor:pointer;padding:9px 10px;font-size:12px;font-weight:700;color:var(--txt);list-style:none}
+  details.lumen summary::-webkit-details-marker{display:none}
+  details.lumen summary::before{content:'▸ ';color:var(--txt-dim)}
+  details.lumen[open] summary::before{content:'▾ '}
+  details.lumen .lbody{padding:2px 10px 11px}
+  .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .lgrid .fld{margin-bottom:2px}
+  #lumen-lock{font-size:11px;color:var(--amber);line-height:1.5;padding:4px 0 9px}
+  #lumen-calc{width:100%;margin-top:10px;padding:9px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel3);color:#fff;font-size:12.5px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #lumen-calc:hover{background:#333c48}
+  #lumen-result{font-size:11.5px;line-height:1.75;font-family:var(--mono);color:var(--txt-dim);margin-top:10px}
+  #lumen-result b{color:#fff}
+  #lumen-result .ok{color:var(--confirmed)} #lumen-result .lo{color:var(--redline)} #lumen-result .hi{color:var(--amber)}
+  #modal-layout .btns{display:flex;gap:9px;margin-top:2px}
+  #modal-layout .btns button{flex:1;padding:11px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);font-size:13px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #modal-layout .btns button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
 </style>
 </head>
 <body>
@@ -124,6 +167,7 @@
     <span class="sub">試作 α-MVP</span>
     <button id="btn-open">図面を開く</button>
     <button id="btn-calib">縮尺を設定</button>
+    <button id="btn-layout">自動配灯</button>
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
     <span class="spacer"></span>
     <button id="btn-save">保存</button>
@@ -139,6 +183,7 @@
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg">
           <defs id="symdefs"></defs>
           <g id="calibg"></g>
+          <g id="layoutg"></g>
           <g id="symg"></g>
         </svg>
       </div>
@@ -153,6 +198,49 @@
         <button id="sel-rotL" title="左回転">⟲</button>
         <button id="sel-rotR" title="右回転">⟳</button>
         <button id="sel-del" class="del" title="削除">🗑</button>
+      </div>
+
+      <!-- 自動配灯 設定パネル（Step B） -->
+      <div id="modal-layout">
+        <h4>自動配灯（均等配置）</h4>
+        <p class="hint2">部屋の範囲を指定しました。台数を決めて「配置」を押すと、各セル中央に均等配置します（壁際＝ピッチ1/2）。</p>
+        <div class="fld">
+          <label>照明器具</label>
+          <select id="layout-type"></select>
+        </div>
+        <div class="nxny">
+          <div class="fld">
+            <label>横 台数 nx</label>
+            <div class="stepper"><button type="button" data-step="nx" data-d="-1">−</button><input id="layout-nx" type="number" min="1" max="999" step="1" value="1"><button type="button" data-step="nx" data-d="1">＋</button></div>
+          </div>
+          <div class="fld">
+            <label>縦 台数 ny</label>
+            <div class="stepper"><button type="button" data-step="ny" data-d="-1">−</button><input id="layout-ny" type="number" min="1" max="999" step="1" value="1"><button type="button" data-step="ny" data-d="1">＋</button></div>
+          </div>
+        </div>
+        <div id="layout-info"></div>
+        <details class="lumen">
+          <summary>光束法で台数を計算（任意）</summary>
+          <div class="lbody">
+            <div id="lumen-lock" style="display:none"></div>
+            <div class="lgrid">
+              <div class="fld"><label>用途</label><select id="lumen-use"></select></div>
+              <div class="fld"><label>設計照度 E [lx]</label><input id="lumen-E" type="number" min="0" step="10" value="500"></div>
+              <div class="fld"><label>器具光束 F [lm]</label><input id="lumen-F" type="number" min="0" step="100" placeholder="例）4000"></div>
+              <div class="fld"><label>照明率 U</label><input id="lumen-U" type="number" min="0" max="1" step="0.05" value="0.6"></div>
+              <div class="fld"><label>保守率 M</label><input id="lumen-M" type="number" min="0" max="1" step="0.05" value="0.7"></div>
+              <div class="fld"><label>器具〜作業面 H [m]</label><input id="lumen-H" type="number" min="0" step="0.1" placeholder="例）2.0"></div>
+              <div class="fld"><label>間口 X [m]</label><input id="lumen-X" type="number" min="0" step="0.1"></div>
+              <div class="fld"><label>奥行 Y [m]</label><input id="lumen-Y" type="number" min="0" step="0.1"></div>
+            </div>
+            <button type="button" id="lumen-calc">台数を計算</button>
+            <div id="lumen-result"></div>
+          </div>
+        </details>
+        <div class="btns">
+          <button type="button" id="layout-cancel">キャンセル</button>
+          <button type="button" id="layout-ok" class="acc">配置</button>
+        </div>
       </div>
     </div>
 
@@ -332,12 +420,19 @@ let scale=1, tx=0, ty=0;
 // 縮尺較正
 let mmPerPx = null;
 let calibMode=false, calibPts=[];
+// 自動配灯（Step B）
+let rooms = [];           // {rid,x0,y0,w,h,nx,ny,type,childUids,lumen}  x0,y0,w,h は world px
+let roomSeq = 1;
+let layoutMode = false;
+let layoutPts = [];       // 部屋の対角点 world座標(最大2)
+let layoutDraft = null;   // {rect:{x0,y0,w,h},nx,ny,type,lumen}  設定パネル表示中
 
 const stage=document.getElementById('stage');
 const world=document.getElementById('world');
 const overlay=document.getElementById('overlay');
 const symg=document.getElementById('symg');
 const calibg=document.getElementById('calibg');
+const layoutg=document.getElementById('layoutg');
 const baseimg=document.getElementById('baseimg');
 const baseEl=document.getElementById('base');
 
@@ -371,6 +466,7 @@ function symById(id){return SYMBOLS.find(s=>s.id===id);}
   });
 })();
 function setTool(id){
+  if(layoutMode) endLayout();
   curTool=id; selUid=null; renderSel();
   document.querySelectorAll('.palbtn').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
   stage.classList.toggle('placing',!!id && !calibMode);
@@ -437,10 +533,14 @@ async function loadPDF(file){
 }
 
 // ============ シンボル配置・描画 ============
-function addSymbol(type,x,y){
-  placed.push({uid:uidSeq++,type,x:Math.round(x),y:Math.round(y),rot:0});
-  renderSyms(); renderTally();
+// placed へ 1点追加し uid を返す（描画しない＝一括配置用）
+function pushSymbol(type,x,y,meta){
+  const p={uid:uidSeq++,type,x:Math.round(x),y:Math.round(y),rot:0};
+  if(meta) Object.assign(p,meta);
+  placed.push(p);
+  return p.uid;
 }
+function addSymbol(type,x,y){ pushSymbol(type,x,y); renderSyms(); renderTally(); }
 function renderSyms(){
   const SZ=40; // シンボル基準サイズ(px, world)
   symg.innerHTML=placed.map(p=>{
@@ -453,7 +553,10 @@ function renderSyms(){
     </g>`;
   }).join('');
   symg.querySelectorAll('.sym').forEach(g=>{
-    g.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); startDragSym(ev, +g.dataset.uid); });
+    g.addEventListener('pointerdown',ev=>{
+      if(layoutMode||calibMode) return; // 較正/配灯中は stage に委譲（対角点を記号の上でも打てる）
+      ev.stopPropagation(); startDragSym(ev, +g.dataset.uid);
+    });
   });
 }
 function renderSel(){
@@ -473,6 +576,7 @@ let dragSym=null, dragMoved=false, panStart=null;
 
 stage.addEventListener('pointerdown',ev=>{
   if(calibMode){ handleCalibClick(ev); return; }
+  if(layoutMode){ handleLayoutClick(ev); return; }
   if(curTool){ // 配置モード：置く
     const w=toWorld(ev.clientX,ev.clientY);
     addSymbol(curTool,w.x,w.y);
@@ -484,6 +588,7 @@ stage.addEventListener('pointerdown',ev=>{
   stage.setPointerCapture(ev.pointerId);
 });
 stage.addEventListener('pointermove',ev=>{
+  if(layoutMode){ if(layoutPts.length===1 && !layoutDraft) drawRubber(toWorld(ev.clientX,ev.clientY)); return; }
   if(dragSym){
     const w=toWorld(ev.clientX,ev.clientY);
     dragSym.x=Math.round(w.x); dragSym.y=Math.round(w.y); dragMoved=true; renderSyms(); return;
@@ -497,7 +602,7 @@ stage.addEventListener('pointerup',ev=>{
   if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y); if(moved<4){ selUid=null; renderSyms(); renderSel(); } panStart=null; stage.classList.remove('panning'); }
 });
 function startDragSym(ev,uid){
-  if(curTool||calibMode)return;
+  if(curTool||calibMode||layoutMode)return;
   selUid=uid; renderSyms(); renderSel();
   dragSym=placed.find(x=>x.uid===uid); dragMoved=false;
   stage.setPointerCapture(ev.pointerId);
@@ -508,6 +613,7 @@ stage.addEventListener('wheel',ev=>{ ev.preventDefault(); const r=stage.getBound
 // ============ 縮尺較正 ============
 document.getElementById('btn-calib').onclick=()=>{
   if(!baseSrc && placed.length===0){ toast('先に図面を開いてください'); return; }
+  if(layoutMode) endLayout();
   calibMode=true; calibPts=[]; setTool(null); stage.classList.add('calib');
   setHint('<b>縮尺設定：</b>図面上で基準になる2点をタップしてください（1点目→2点目）。');
   calibg.innerHTML='';
@@ -536,6 +642,216 @@ document.getElementById('calib-ok').onclick=()=>{
 document.getElementById('calib-cancel').onclick=endCalib;
 function endCalib(){ calibMode=false; document.getElementById('modal').classList.remove('show'); stage.classList.remove('calib'); calibg.innerHTML=''; calibPts=[]; setHint('左のシンボルを選ぶ→図面をタップで配置。'); }
 
+// ============ 自動配灯（照明の均等配置 / Step B） ============
+const LIGHT_TYPES = SYMBOLS.filter(s=>s.cat==='照明');
+// 用途別 設計照度の目安（JIS Z 9110）
+const USE_E = [['事務室',750],['会議室',500],['店舗',500],['住宅 居間',200],['住宅 台所',300],
+  ['教室',500],['廊下・階段',150],['便所',150],['倉庫',100],['駐車場',75],['工場(精密)',750],['体育館',300]];
+
+function el(id){ return document.getElementById(id); }
+function rectFrom(a,b){ return {x0:Math.min(a.x,b.x), y0:Math.min(a.y,b.y), w:Math.abs(a.x-b.x), h:Math.abs(a.y-b.y)}; }
+function clampCount(v){ let n=Math.round(parseFloat(v)); if(!isFinite(n)||n<1)n=1; return Math.min(n,999); }
+const GHOST_CAP=2000;   // プレビュー(ゴースト)描画の上限点数
+const MAX_TOTAL=5000;   // 一括配置の上限台数
+function pxToM(px){ return mmPerPx ? px*mmPerPx/1000 : null; }
+
+// 目標台数 N を nx×ny に分解（総数≧N かつ縦横ピッチが近くなる格子を選ぶ）
+// スコア = セル正方度（縦横ピッチが等しいほど良い＝主目的）＋ 過剰台数の軽いペナルティ。
+// 正方度を主項にすることで、素数台数×正方形の部屋でも 1×N の一列に退化しない。
+function factorizeGrid(N,W,H){
+  N=Math.min(Math.max(1,Math.ceil(N)), 4000);  // ループと結果を有界化
+  if(N===1) return {nx:1,ny:1};
+  let best=null;
+  for(let nx=1;nx<=N;nx++){
+    const ny=Math.ceil(N/nx);
+    const total=nx*ny;
+    const Sx=W/nx, Sy=H/ny;
+    const score=Math.abs(Math.log(Sx/Sy))+0.2*(total-N); // セル正方度(主) + 過剰台数(従)
+    if(!best||score<best.score) best={nx,ny,score};
+  }
+  return {nx:best.nx,ny:best.ny};
+}
+// 各セル中央の座標配列（確定仕様の式）
+function computeGrid(rect,nx,ny){
+  nx=Math.max(1,Math.round(nx)); ny=Math.max(1,Math.round(ny));
+  const pts=[];
+  for(let j=0;j<ny;j++) for(let i=0;i<nx;i++){
+    pts.push({x:rect.x0+(rect.w/nx)*(i+0.5), y:rect.y0+(rect.h/ny)*(j+0.5)});
+  }
+  return pts;
+}
+
+el('btn-layout').onclick=startLayout;
+function startLayout(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(calibMode) endCalib();
+  setTool(null);                 // 配置ツール解除（layoutMode はまだ false なので endLayout は走らない）
+  layoutMode=true; layoutPts=[]; layoutDraft=null;
+  stage.classList.add('layout');
+  setHint('<b>自動配灯：</b>部屋の対角2点をタップして範囲を指定してください。');
+  paintLayoutLayer();
+}
+function endLayout(){
+  layoutMode=false; layoutPts=[]; layoutDraft=null;
+  stage.classList.remove('layout');
+  el('modal-layout').classList.remove('show');
+  paintLayoutLayer();
+  setHint('左のシンボルを選ぶ→図面をタップで配置。');
+}
+
+function handleLayoutClick(ev){
+  if(layoutDraft) return;        // 設定パネル表示中は図面クリックを無視
+  const w=toWorld(ev.clientX,ev.clientY);
+  layoutPts.push({x:w.x,y:w.y});
+  if(layoutPts.length>=2){
+    const rect=rectFrom(layoutPts[0],layoutPts[1]);
+    if(rect.w<2||rect.h<2){ toast('範囲が小さすぎます。もう一度指定してください'); layoutPts=[]; paintLayoutLayer(); return; }
+    openLayoutModal(rect);
+  } else {
+    paintLayoutLayer();
+  }
+}
+function drawRubber(end){ paintLayoutLayer(end); }
+
+// #layoutg を state から一括描画：確定済み部屋枠 + 進行中の矩形/ゴースト/対角点
+function paintLayoutLayer(rubberEnd){
+  let h='';
+  rooms.forEach(r=>{
+    h+=`<rect class="roomrect" x="${r.x0}" y="${r.y0}" width="${r.w}" height="${r.h}"/>`;
+    const fs=Math.max(10, Math.min(r.w,r.h)*0.05);
+    h+=`<text class="roomlbl" x="${r.x0+4}" y="${r.y0+fs+2}" font-size="${fs.toFixed(0)}">${r.nx}×${r.ny}</text>`;
+  });
+  if(layoutMode){
+    if(layoutDraft){
+      const rc=layoutDraft.rect, s=symById(layoutDraft.type);
+      h+=`<rect class="layoutrect" x="${rc.x0}" y="${rc.y0}" width="${rc.w}" height="${rc.h}"/>`;
+      if(layoutDraft.nx*layoutDraft.ny<=GHOST_CAP){  // 過大時はゴースト省略（フリーズ防止）
+        computeGrid(rc,layoutDraft.nx,layoutDraft.ny).forEach(pt=>{
+          h+=`<g class="ghost" transform="translate(${pt.x},${pt.y})" style="color:${s?s.color:'#E8B23A'}"><g transform="translate(-20,-20)"><use href="#sym-${layoutDraft.type}"/></g></g>`;
+        });
+      }
+    } else if(layoutPts.length===1 && rubberEnd){
+      const rc=rectFrom(layoutPts[0],rubberEnd);
+      h+=`<rect class="layoutrect" x="${rc.x0}" y="${rc.y0}" width="${rc.w}" height="${rc.h}"/>`;
+    }
+    layoutPts.forEach(p=>{ h+=`<circle class="calibpt" cx="${p.x}" cy="${p.y}" r="5" vector-effect="non-scaling-stroke"/>`; });
+  }
+  layoutg.innerHTML=h;
+}
+
+function openLayoutModal(rect){
+  let defType='light';
+  if(curTool && LIGHT_TYPES.some(s=>s.id===curTool)) defType=curTool;
+  layoutDraft={rect, nx:1, ny:1, type:defType, lumen:null};
+  const sel=el('layout-type');
+  sel.innerHTML=LIGHT_TYPES.map(s=>`<option value="${s.id}">${s.nm}</option>`).join('');
+  sel.value=defType;
+  el('layout-nx').value=1; el('layout-ny').value=1;
+  const use=el('lumen-use');
+  use.innerHTML=USE_E.map(([nm,e])=>`<option value="${e}">${nm}（${e}lx）</option>`).join('');
+  el('lumen-E').value=use.value;
+  setupLumenDims();
+  el('lumen-result').innerHTML='';
+  el('modal-layout').classList.add('show');
+  updateInfo();
+}
+function setupLumenDims(){
+  const rc=layoutDraft.rect, lock=el('lumen-lock'), X=el('lumen-X'), Y=el('lumen-Y');
+  if(mmPerPx){
+    X.value=(rc.w*mmPerPx/1000).toFixed(2); Y.value=(rc.h*mmPerPx/1000).toFixed(2);
+    X.disabled=true; Y.disabled=true; lock.style.display='none';
+  } else {
+    X.value=''; Y.value=''; X.disabled=false; Y.disabled=false;
+    lock.style.display='block';
+    lock.textContent='縮尺未設定：室寸[m]を手入力すると計算できます（配置自体は台数指定で可能）。';
+  }
+}
+function updateInfo(){
+  if(!layoutDraft) return;
+  const rc=layoutDraft.rect;
+  const nx=clampCount(el('layout-nx').value), ny=clampCount(el('layout-ny').value);
+  layoutDraft.nx=nx; layoutDraft.ny=ny; layoutDraft.type=el('layout-type').value;
+  const total=nx*ny;
+  let dim, pitch;
+  if(mmPerPx){
+    const Wm=rc.w*mmPerPx/1000, Hm=rc.h*mmPerPx/1000, Sx=Wm/nx, Sy=Hm/ny;
+    dim=`部屋 <b>${Wm.toFixed(2)}×${Hm.toFixed(2)} m</b>`;
+    const bad=(Math.max(Sx,Sy)>3.3||Math.min(Sx,Sy)<2.5);
+    pitch=`ピッチ <b>${Sx.toFixed(2)}×${Sy.toFixed(2)} m</b> <span${bad?' class="warn"':''}>(目安2.5〜3.3m)</span><br>壁際 <b>${(Sx/2).toFixed(2)} / ${(Sy/2).toFixed(2)} m</b>`;
+  } else {
+    dim=`部屋 <b>${Math.round(rc.w)}×${Math.round(rc.h)} px</b>（縮尺未設定）`;
+    pitch=`ピッチ <b>${(rc.w/nx).toFixed(0)}×${(rc.h/ny).toFixed(0)} px</b><br>壁際 <b>${(rc.w/nx/2).toFixed(0)} / ${(rc.h/ny/2).toFixed(0)} px</b>`;
+  }
+  const overWarn = total>GHOST_CAP ? ` <span class="warn">※台数が多すぎます（プレビュー省略）</span>` : '';
+  el('layout-info').innerHTML=`${dim}<br>台数 <b>${nx}×${ny} = ${total}台</b>${overWarn}<br>${pitch}`;
+  paintLayoutLayer();
+}
+
+el('lumen-calc').onclick=()=>{
+  const E=+el('lumen-E').value, F=+el('lumen-F').value, U=+el('lumen-U').value,
+        M=+el('lumen-M').value, H=+el('lumen-H').value, X=+el('lumen-X').value, Y=+el('lumen-Y').value;
+  if(![E,F,U,M,H,X,Y].every(v=>isFinite(v)&&v>0)){ toast('光束法：E・F・U・M・H・X・Y をすべて入力してください'); return; }
+  const A=X*Y;
+  const K=(X*Y)/((X+Y)*H);
+  const Nreq=Math.ceil(E*A/(F*U*M));
+  const g=factorizeGrid(Nreq, layoutDraft.rect.w, layoutDraft.rect.h);
+  el('layout-nx').value=g.nx; el('layout-ny').value=g.ny;
+  layoutDraft.lumen={E,F,U,M,H,Xm:X,Ym:Y,A,K,Nreq};
+  updateInfo();
+  const total=g.nx*g.ny, Eavg=total*F*U*M/A, rate=Eavg/E*100;
+  const cls=rate<100?'lo':(rate<=130?'ok':'hi');
+  const Sx=X/g.nx, Sy=Y/g.ny, SH=Math.max(Sx,Sy)/H;
+  el('lumen-result').innerHTML=
+    `室指数 K <b>${K.toFixed(2)}</b>　必要台数 <b>${Nreq}台</b><br>`+
+    `割付 <b>${g.nx}×${g.ny} = ${total}台</b><br>`+
+    `計算平均照度 <b>${Eavg.toFixed(0)} lx</b>　達成率 <b class="${cls}">${rate.toFixed(0)}%</b> (目安100〜130%)<br>`+
+    `ピッチ ${Sx.toFixed(2)}×${Sy.toFixed(2)} m　S/H比 ${SH.toFixed(2)}<br>`+
+    `<span style="opacity:.75">※S≦約1.5H で均整度0.5以上が目安（参考値）。台数は手調整できます。</span>`;
+};
+
+el('layout-cancel').onclick=endLayout;
+el('layout-ok').onclick=commitLayout;
+function commitLayout(){
+  if(!layoutDraft) return;
+  const nx=clampCount(el('layout-nx').value), ny=clampCount(el('layout-ny').value);
+  const type=el('layout-type').value, total=nx*ny;
+  if(total>MAX_TOTAL){ toast(`台数が多すぎます（最大${MAX_TOTAL}台）。範囲か台数を見直してください`); return; }
+  if(total>500 && !confirm(`${total}台を配置します。よろしいですか？`)) return;
+  const rc=layoutDraft.rect;
+  const room={rid:roomSeq++, x0:Math.round(rc.x0), y0:Math.round(rc.y0), w:Math.round(rc.w), h:Math.round(rc.h),
+    nx, ny, type, childUids:[], lumen:layoutDraft.lumen||null};
+  placeRoomLights(room);
+  rooms.push(room);
+  renderSyms(); renderTally();
+  endLayout();
+  toast(`${total}台を配置しました`);
+}
+function placeRoomLights(room){
+  const ids=[];
+  for(let j=0;j<room.ny;j++) for(let i=0;i<room.nx;i++){
+    const x=room.x0+(room.w/room.nx)*(i+0.5);
+    const y=room.y0+(room.h/room.ny)*(j+0.5);
+    ids.push(pushSymbol(room.type,x,y,{roomId:room.rid,gi:i,gj:j}));
+  }
+  room.childUids=ids;
+}
+
+// 設定パネルの入力配線（要素は常設のため初期化時に一度だけ）
+(function(){
+  el('modal-layout').addEventListener('pointerdown',e=>e.stopPropagation()); // stageのパン/配置と干渉させない
+  el('modal-layout').addEventListener('wheel',e=>e.stopPropagation(),{passive:true}); // stageのズームに吸われずパネル内スクロール
+  ['layout-nx','layout-ny'].forEach(id=>el(id).addEventListener('input',updateInfo));
+  el('layout-type').addEventListener('change',updateInfo);
+  document.querySelectorAll('#modal-layout .stepper button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const inp=el('layout-'+b.dataset.step);
+      inp.value=Math.max(1, clampCount(inp.value)+(+b.dataset.d));
+      updateInfo();
+    });
+  });
+  el('lumen-use').addEventListener('change',e=>{ el('lumen-E').value=e.target.value; });
+})();
+
 // ============ 集計 ============
 function renderTally(){
   document.getElementById('tot').textContent=placed.length;
@@ -550,7 +866,7 @@ function renderTally(){
 
 // ============ 保存/読込/出力 ============
 function saveJSON(){
-  const st={ver:'alpha-mvp-1', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed};
+  const st={ver:'alpha-mvp-2', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed, rooms, roomSeq};
   const blob=new Blob([JSON.stringify(st)],{type:'application/json'});
   dl(blob,'haichi_'+ts()+'.json'); toast('保存しました');
 }
@@ -559,10 +875,11 @@ function loadState(file){
   r.onload=()=>{ try{
     const st=JSON.parse(r.result);
     placed=st.placed||[]; uidSeq=st.uidSeq||(placed.length+1); mmPerPx=st.mmPerPx||null;
+    rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
     if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); } else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); }
     document.getElementById('uploader').style.display='none';
     document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
-    selUid=null; renderSyms(); renderSel(); renderTally(); fitView(); toast('読み込みました');
+    selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); fitView(); toast('読み込みました');
   }catch(e){ toast('ファイルを読めませんでした'); } };
   r.readAsText(file);
 }
@@ -585,7 +902,7 @@ document.getElementById('btn-open').onclick=()=>document.getElementById('file-ba
 document.getElementById('btn-save').onclick=saveJSON;
 document.getElementById('btn-load').onclick=()=>document.getElementById('file-load').click();
 document.getElementById('btn-csv').onclick=exportCSV;
-document.getElementById('btn-clear').onclick=()=>{ if(placed.length&&!confirm('配置をすべて消去しますか？'))return; placed=[]; selUid=null; renderSyms(); renderSel(); renderTally(); };
+document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length)&&!confirm('配置をすべて消去しますか？'))return; placed=[]; rooms=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); };
 document.getElementById('file-base').addEventListener('change',e=>{ if(e.target.files[0])loadFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('file-load').addEventListener('change',e=>{ if(e.target.files[0])loadState(e.target.files[0]); e.target.value=''; });
 document.getElementById('btn-sample').onclick=()=>{ document.getElementById('uploader').style.display='none'; setBaseSize(1600,1100); clearBase(); fitView(); };
