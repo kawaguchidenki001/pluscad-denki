@@ -581,7 +581,7 @@ function renderSyms(){
   }).join('');
   symg.querySelectorAll('.sym').forEach(g=>{
     g.addEventListener('pointerdown',ev=>{
-      if(layoutMode||calibMode) return; // 較正/配灯中は stage に委譲（対角点を記号の上でも打てる）
+      if(layoutMode||calibMode||curTool) return; // 較正/配灯/配置中は stage に委譲（記号の上でも対角点タップ・重ね置きできる）
       if(wireMode){ ev.stopPropagation(); handleWireSymTap(+g.dataset.uid); return; }
       ev.stopPropagation(); startDragSym(ev, +g.dataset.uid);
     });
@@ -885,6 +885,13 @@ function placeRoomLights(room){
 // ============ 自動配線（単線図 / Step C） ============
 function catOf(p){ const s=symById(p.type); return s?s.cat:''; }
 function wireLenPx(w){ const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b); if(!a||!b)return 0; return Math.hypot(a.x-b.x,a.y-b.y); }
+// 手動配線の回路：両端点から決定的に導出（タップ順・再配線に依存しない。両方あれば小さい回路番号）
+function wireCircuitOf(auid,buid){
+  const a=placed.find(p=>p.uid===auid), b=placed.find(p=>p.uid===buid);
+  const ca=(a&&a.circuit!=null)?a.circuit:null, cb=(b&&b.circuit!=null)?b.circuit:null;
+  if(ca!=null&&cb!=null) return Math.min(ca,cb);
+  return ca!=null?ca:(cb!=null?cb:0);
+}
 
 // 近接クラスタリング（union-find）：閾値内で連結する点を同一グループに
 function clusterByProximity(items, thr){
@@ -955,8 +962,8 @@ function autoWire(){
     let best=null; lights.forEach(l=>{ const d=Math.hypot(sw.x-l.x,sw.y-l.y); if(!best||d<best.d) best={d,l}; });
     if(best){ sw.circuit=best.l.circuit; wires.push({uid:wireSeq++,a:sw.uid,b:best.l.uid,circuit:best.l.circuit,kind:'sw',auto:true}); }
   });
-  // 手動配線は端点の新しい回路に追従（回路別集計・色の不整合を防ぐ）
-  wires.filter(w=>!w.auto).forEach(w=>{ const a=placed.find(p=>p.uid===w.a); w.circuit=(a&&a.circuit!=null)?a.circuit:0; });
+  // 手動配線は端点の新しい回路に追従（回路別集計・色の不整合を防ぐ。両端点から決定的に導出）
+  wires.filter(w=>!w.auto).forEach(w=>{ w.circuit=wireCircuitOf(w.a,w.b); });
   renderSyms(); renderWireInfo();
   toast(circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません');
 }
@@ -1014,9 +1021,7 @@ function handleWireSymTap(uid){
   if(wirePendA==null){ wirePendA=uid; renderSyms(); toast('接続先のシンボルをタップ'); return; }
   if(wirePendA===uid){ wirePendA=null; renderSyms(); return; }      // 同じをもう一度でキャンセル
   if(wires.some(w=>(w.a===wirePendA&&w.b===uid)||(w.a===uid&&w.b===wirePendA))){ toast('その2点は既に結線済みです'); wirePendA=null; renderSyms(); return; }
-  const a=placed.find(p=>p.uid===wirePendA);
-  const circuit=(a&&a.circuit!=null)?a.circuit:0;
-  wires.push({uid:wireSeq++, a:wirePendA, b:uid, circuit, kind:'manual', auto:false});
+  wires.push({uid:wireSeq++, a:wirePendA, b:uid, circuit:wireCircuitOf(wirePendA,uid), kind:'manual', auto:false});
   wirePendA=null; renderSyms(); renderWireInfo();
 }
 function deleteWire(uid){ wires=wires.filter(w=>w.uid!==uid); renderWires(); renderWireInfo(); }
