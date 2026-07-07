@@ -113,8 +113,107 @@
   .mbox .btns button{flex:1;padding:11px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);font-size:13px;font-weight:700;font-family:var(--jp);cursor:pointer}
   .mbox .btns button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
   input[type=file]{display:none}
-  .toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:50;background:var(--confirmed);color:#fff;padding:9px 16px;border-radius:9px;font-size:12.5px;font-weight:700;opacity:0;transition:opacity .25s;pointer-events:none}
+  .toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:80;background:var(--confirmed);color:#fff;padding:9px 16px;border-radius:9px;font-size:12.5px;font-weight:700;opacity:0;transition:opacity .25s;pointer-events:none}
   .toast.show{opacity:1}
+
+  /* ---- 自動配灯（Step B） ---- */
+  #stage.layout{cursor:crosshair}
+  .layoutrect{stroke:var(--amber);stroke-width:1.6;stroke-dasharray:6 4;fill:rgba(217,154,36,.06);vector-effect:non-scaling-stroke}
+  .roomrect{stroke:var(--amber);stroke-width:1.2;stroke-dasharray:4 4;fill:none;vector-effect:non-scaling-stroke;opacity:.45}
+  .roomlbl{fill:var(--amber);font-family:var(--mono);opacity:.6}
+  .ghost{opacity:.4;pointer-events:none}
+  #modal-layout{position:absolute;right:12px;top:12px;width:min(372px,94%);max-height:calc(100% - 24px);overflow-y:auto;z-index:12;
+    background:var(--panel2);border:1px solid var(--panel-line);border-radius:14px;padding:15px 16px 14px;color:var(--txt);box-shadow:0 10px 34px rgba(0,0,0,.5);display:none}
+  #modal-layout.show{display:block}
+  #modal-layout h4{margin:0 0 3px;font-size:15px}
+  #modal-layout .hint2{font-size:11px;color:var(--txt-dim);margin:0 0 12px;line-height:1.5}
+  #modal-layout .fld{margin-bottom:11px}
+  #modal-layout label{display:block;font-size:11px;color:var(--txt-dim);font-weight:700;margin-bottom:4px;letter-spacing:.02em}
+  #modal-layout select,#modal-layout input{width:100%;padding:8px 9px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;font-size:14px;font-family:var(--jp)}
+  #modal-layout input[type=number]{font-family:var(--mono)}
+  #modal-layout input:disabled{color:var(--txt-dim);background:#171a20}
+  .nxny{display:flex;gap:10px}
+  .nxny .fld{flex:1;margin-bottom:11px}
+  .stepper{display:flex;align-items:center;gap:7px}
+  .stepper button{flex:none;width:33px;height:34px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);font-size:18px;line-height:1;cursor:pointer}
+  .stepper button:hover{background:var(--panel3)}
+  .stepper input{text-align:center}
+  #layout-info{background:var(--panel);border:1px solid var(--panel-line);border-radius:9px;padding:9px 10px;font-size:12px;line-height:1.75;font-family:var(--mono);color:var(--txt-dim);margin-bottom:11px}
+  #layout-info b{color:#fff}
+  #layout-info .warn{color:var(--amber)}
+  details.lumen{border:1px solid var(--panel-line);border-radius:9px;margin-bottom:12px;background:var(--panel)}
+  details.lumen summary{cursor:pointer;padding:9px 10px;font-size:12px;font-weight:700;color:var(--txt);list-style:none}
+  details.lumen summary::-webkit-details-marker{display:none}
+  details.lumen summary::before{content:'▸ ';color:var(--txt-dim)}
+  details.lumen[open] summary::before{content:'▾ '}
+  details.lumen .lbody{padding:2px 10px 11px}
+  .lgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .lgrid .fld{margin-bottom:2px}
+  #lumen-lock{font-size:11px;color:var(--amber);line-height:1.5;padding:4px 0 9px}
+  #lumen-calc{width:100%;margin-top:10px;padding:9px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel3);color:#fff;font-size:12.5px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #lumen-calc:hover{background:#333c48}
+  #lumen-result{font-size:11.5px;line-height:1.75;font-family:var(--mono);color:var(--txt-dim);margin-top:10px}
+  #lumen-result b{color:#fff}
+  #lumen-result .ok{color:var(--confirmed)} #lumen-result .lo{color:var(--redline)} #lumen-result .hi{color:var(--amber)}
+  #modal-layout .btns{display:flex;gap:9px;margin-top:2px}
+  #modal-layout .btns button{flex:1;padding:11px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);font-size:13px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #modal-layout .btns button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
+
+  /* ---- 自動配線（Step C） ---- */
+  #stage.wire{cursor:pointer}
+  .wire{pointer-events:none}
+  .wpendmark{display:none}
+  .sym.wpend .wpendmark{display:block}
+  header button.on{background:var(--redline);border-color:var(--redline);color:#fff}
+  #wireinfo{flex:none;border-top:1px solid var(--panel-line);padding:9px 12px;max-height:36%;overflow-y:auto}
+  #wireinfo:empty{display:none}
+  #wireinfo .witit{font-size:11.5px;color:var(--txt-dim);margin-bottom:7px;line-height:1.5}
+  #wireinfo .witit b{color:#fff}
+
+  /* ---- 見積（Step D） ---- */
+  #modal-estimate{position:fixed;inset:0;z-index:60;background:var(--panel);display:none;flex-direction:column;color:var(--txt)}
+  #modal-estimate.show{display:flex}
+  #modal-estimate .ehead{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--panel-line)}
+  #modal-estimate .ehead h3{margin:0;font-size:15px}
+  .echip{font-size:11px;font-family:var(--mono);padding:4px 9px;border-radius:6px;border:1px solid var(--panel-line);background:var(--panel2);color:var(--txt-dim)}
+  .echip.ok{color:#fff;border-color:var(--confirmed)}
+  .echip.err{color:#fff;background:var(--redline);border-color:var(--redline)}
+  #modal-estimate .espacer{flex:1}
+  #modal-estimate .ehead button,#efoot button{background:var(--panel2);color:var(--txt);border:1px solid var(--panel-line);border-radius:7px;padding:8px 13px;font-size:12px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #modal-estimate .ehead button:hover,#efoot button:hover{background:var(--panel3)}
+  #efoot button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
+  #ehead-inputs{flex:none;display:flex;gap:12px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--panel-line)}
+  #ehead-inputs label{font-size:10px;color:var(--txt-dim);display:flex;flex-direction:column;gap:3px}
+  #ehead-inputs input{background:var(--panel);border:1px solid var(--panel-line);border-radius:6px;color:#fff;padding:5px 8px;font-size:12px;font-family:var(--jp);min-width:130px}
+  #eopts{flex:none;display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:8px 16px;border-bottom:1px solid var(--panel-line);font-size:11px;color:var(--txt-dim)}
+  #eopts label{display:flex;align-items:center;gap:5px}
+  #eopts input[type=number]{width:60px;background:var(--panel);border:1px solid var(--panel-line);border-radius:6px;color:#fff;padding:4px 6px;font-size:12px;font-family:var(--mono);text-align:right}
+  #ebody{flex:1;overflow:auto}
+  table.est{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+  table.est th{position:sticky;top:0;background:var(--panel2);color:var(--txt-dim);font-weight:700;font-size:11px;padding:7px 8px;text-align:left;border-bottom:1px solid var(--panel-line);z-index:1}
+  table.est th.n,table.est td.n{text-align:right}
+  table.est td{padding:5px 8px;border-bottom:1px solid var(--panel-line);vertical-align:middle}
+  table.est td.n{font-family:var(--mono);color:#fff}
+  table.est tr:hover td{background:var(--panel2)}
+  table.est select{max-width:240px;background:var(--panel);border:1px solid var(--panel-line);color:var(--txt);border-radius:5px;padding:4px 6px;font-size:11.5px;font-family:var(--jp)}
+  table.est input.qty{width:74px;background:var(--panel);border:1px solid var(--panel-line);color:#fff;border-radius:5px;padding:4px 6px;font-size:12px;font-family:var(--mono);text-align:right}
+  .cdot{display:inline-block;width:9px;height:9px;border-radius:50%}
+  .cdot.g{background:var(--confirmed)} .cdot.y{background:var(--amber)} .cdot.r{background:var(--redline)}
+  #etot{flex:none;border-top:1px solid var(--panel-line);padding:11px 16px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;background:var(--panel2)}
+  #etot .tt{font-size:11px;color:var(--txt-dim)}
+  #etot .tt b{color:#fff;font-family:var(--mono);font-size:14px;margin-left:5px}
+  #etot .grand b{color:#fff;font-size:20px}
+
+  /* ---- 書き出しメニュー（Step E） ---- */
+  #expwrap{position:relative;display:inline-block}
+  #expmenu{position:absolute;right:0;top:calc(100% + 6px);background:var(--panel2);border:1px solid var(--panel-line);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.5);display:none;z-index:45;min-width:200px;overflow:hidden}
+  #expmenu.show{display:block}
+  #expmenu button{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--panel-line);border-radius:0;color:var(--txt);padding:11px 14px;font-size:12px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #expmenu button:last-child{border-bottom:none}
+  #expmenu button:hover{background:var(--panel3)}
+  #expmenu .note{font-size:10px;color:var(--txt-dim);padding:7px 14px 9px;line-height:1.5}
+  #enote{flex:none;font-size:10.5px;color:var(--txt-dim);padding:7px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
+  #efoot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -124,6 +223,19 @@
     <span class="sub">試作 α-MVP</span>
     <button id="btn-open">図面を開く</button>
     <button id="btn-calib">縮尺を設定</button>
+    <button id="btn-layout">自動配灯</button>
+    <button id="btn-autowire">自動配線</button>
+    <button id="btn-wire">配線編集</button>
+    <button id="btn-estimate">見積</button>
+    <span id="expwrap">
+      <button id="btn-export">書き出し ▾</button>
+      <div id="expmenu">
+        <button id="exp-dxf">完成図 DXF（.dxf）</button>
+        <button id="exp-jww">完成図 JWW（.jww）</button>
+        <button id="exp-print">印刷（PDF保存）</button>
+        <div class="note">DXF/JWWは較正済み実寸[mm]で出力。JWWは自動縮尺（A3基準）。</div>
+      </div>
+    </span>
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
     <span class="spacer"></span>
     <button id="btn-save">保存</button>
@@ -139,6 +251,8 @@
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg">
           <defs id="symdefs"></defs>
           <g id="calibg"></g>
+          <g id="layoutg"></g>
+          <g id="wireg"></g>
           <g id="symg"></g>
         </svg>
       </div>
@@ -154,6 +268,49 @@
         <button id="sel-rotR" title="右回転">⟳</button>
         <button id="sel-del" class="del" title="削除">🗑</button>
       </div>
+
+      <!-- 自動配灯 設定パネル（Step B） -->
+      <div id="modal-layout">
+        <h4>自動配灯（均等配置）</h4>
+        <p class="hint2">部屋の範囲を指定しました。台数を決めて「配置」を押すと、各セル中央に均等配置します（壁際＝ピッチ1/2）。</p>
+        <div class="fld">
+          <label>照明器具</label>
+          <select id="layout-type"></select>
+        </div>
+        <div class="nxny">
+          <div class="fld">
+            <label>横 台数 nx</label>
+            <div class="stepper"><button type="button" data-step="nx" data-d="-1">−</button><input id="layout-nx" type="number" min="1" max="999" step="1" value="1"><button type="button" data-step="nx" data-d="1">＋</button></div>
+          </div>
+          <div class="fld">
+            <label>縦 台数 ny</label>
+            <div class="stepper"><button type="button" data-step="ny" data-d="-1">−</button><input id="layout-ny" type="number" min="1" max="999" step="1" value="1"><button type="button" data-step="ny" data-d="1">＋</button></div>
+          </div>
+        </div>
+        <div id="layout-info"></div>
+        <details class="lumen">
+          <summary>光束法で台数を計算（任意）</summary>
+          <div class="lbody">
+            <div id="lumen-lock" style="display:none"></div>
+            <div class="lgrid">
+              <div class="fld"><label>用途</label><select id="lumen-use"></select></div>
+              <div class="fld"><label>設計照度 E [lx]</label><input id="lumen-E" type="number" min="0" step="10" value="500"></div>
+              <div class="fld"><label>器具光束 F [lm]</label><input id="lumen-F" type="number" min="0" step="100" placeholder="例）4000"></div>
+              <div class="fld"><label>照明率 U</label><input id="lumen-U" type="number" min="0" max="1" step="0.05" value="0.6"></div>
+              <div class="fld"><label>保守率 M</label><input id="lumen-M" type="number" min="0" max="1" step="0.05" value="0.7"></div>
+              <div class="fld"><label>器具〜作業面 H [m]</label><input id="lumen-H" type="number" min="0" step="0.1" placeholder="例）2.0"></div>
+              <div class="fld"><label>間口 X [m]</label><input id="lumen-X" type="number" min="0" step="0.1"></div>
+              <div class="fld"><label>奥行 Y [m]</label><input id="lumen-Y" type="number" min="0" step="0.1"></div>
+            </div>
+            <button type="button" id="lumen-calc">台数を計算</button>
+            <div id="lumen-result"></div>
+          </div>
+        </details>
+        <div class="btns">
+          <button type="button" id="layout-cancel">キャンセル</button>
+          <button type="button" id="layout-ok" class="acc">配置</button>
+        </div>
+      </div>
     </div>
 
     <div id="tally">
@@ -162,6 +319,7 @@
         <div class="cnt">配置数 <b id="tot">0</b> 点</div>
       </div>
       <div id="tallybody"></div>
+      <div id="wireinfo"></div>
       <div class="foot">
         <button id="btn-csv">集計CSV</button>
         <button id="btn-clear">全消去</button>
@@ -199,12 +357,52 @@
     </div>
   </div>
 
+  <!-- 見積モーダル（Step D） -->
+  <div id="modal-estimate">
+    <div class="ehead">
+      <h3>見積（自動拾い→岐阜県単価連携）</h3>
+      <span class="echip" id="emaster">単価マスタ未読込</span>
+      <input type="file" id="file-unit" accept=".json,application/json" style="display:none">
+      <button id="e-loadmaster" style="display:none">unit_prices.json を選択</button>
+      <span class="espacer"></span>
+      <button id="e-close">閉じる</button>
+    </div>
+    <div id="ehead-inputs">
+      <label>工事名<input id="eh-name" type="text" placeholder="○○邸 電気工事"></label>
+      <label>宛先<input id="eh-to" type="text" placeholder="○○様"></label>
+      <label>見積番号<input id="eh-no" type="text" placeholder="No."></label>
+      <label>見積日<input id="eh-date" type="text" placeholder="YYYY/MM/DD"></label>
+    </div>
+    <div id="eopts">
+      <label>現場管理費 <input id="eo-site" type="number" min="0" step="1" value="0">%</label>
+      <label>一般管理費 <input id="eo-admin" type="number" min="0" step="1" value="0">%</label>
+      <label>値引 ¥<input id="eo-disc" type="number" min="0" step="1000" value="0"></label>
+      <label>消費税 <input id="eo-tax" type="number" min="0" step="1" value="10">%</label>
+      <label>配線余長 <input id="eo-slack" type="number" min="0" step="5" value="10">%</label>
+      <label><input id="eo-round" type="checkbox" checked>円未満切捨</label>
+      <label><input id="eo-break" type="checkbox">材工内訳</label>
+      <label><input id="eo-conduit" type="checkbox">電線管を含める</label>
+    </div>
+    <div id="ebody"></div>
+    <div id="etot"></div>
+    <div id="enote">※単価＝複合単価(材料＋労務＋直接経費)。丸めにより内訳計と金額は一致しないことがあります。／現場管理費・一般管理費は工事全体割増で、複合単価内の経費とは二重計上ではありません（既定0%＝実勢率が決まるまで加算しません）。／配線は縮尺較正済みの場合のみ計上します。品目・規格は自動割当のたたき台です（黄＝自動／緑＝確定済／赤＝未マッチ）。必ず内容をご確認ください。</div>
+    <div id="efoot">
+      <button id="e-csv" class="acc">見積CSV（Excel）</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
 <input type="file" id="file-base" accept=".pdf,image/*">
 <input type="file" id="file-load" accept=".json,application/json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- DXF⇔JWW 変換エンジン（完成図の書き出し / Step E） -->
+<script src="lib/dxf_jww/jww_writer.js"></script>
+<script src="lib/dxf_jww/jww_reader.js"></script>
+<script src="lib/dxf_jww/dxf_parser.js"></script>
+<script src="lib/dxf_jww/dxf_to_jww.js"></script>
+<script src="lib/dxf_jww/jww_to_dxf.js"></script>
 <script>
 'use strict';
 // ============ シンボル定義（内線規程/JIS風の簡易記号・SVG） ============
@@ -332,12 +530,38 @@ let scale=1, tx=0, ty=0;
 // 縮尺較正
 let mmPerPx = null;
 let calibMode=false, calibPts=[];
+// 自動配灯（Step B）
+let rooms = [];           // {rid,x0,y0,w,h,nx,ny,type,childUids,lumen}  x0,y0,w,h は world px
+let roomSeq = 1;
+let layoutMode = false;
+let layoutPts = [];       // 部屋の対角点 world座標(最大2)
+let layoutDraft = null;   // {rect:{x0,y0,w,h},nx,ny,type,lumen}  設定パネル表示中
+// 自動配線（Step C）
+let wires = [];           // {uid,a,b,circuit,kind,auto}  a,b は接続シンボルuid、kind:feed/power/sw/manual
+let wireSeq = 1;
+let wireMode = false;     // 配線編集モード
+let wirePendA = null;     // 結線の1点目 uid
+const CIRC_COLORS = ['#E2452B','#3F72C4','#1F9A60','#D99A24','#8B5CF6','#26C6DA','#EC4899','#84CC16','#F97316','#14B8A6'];
+function circuitColor(n){ return n ? CIRC_COLORS[(n-1)%CIRC_COLORS.length] : '#9AA0AA'; }
+// 見積（Step D）
+let MASTER=null;          // 単価マスタ配列（ランタイムのみ・保存しない）
+let MASTER_IDX=null;      // {byCat:Map, byName:Map, cats:[]}
+let masterLoading=null;   // fetch多重防止
+function defaultEstimate(){
+  return { head:{name:'',to:'',no:'',date:''},
+    opts:{siteRate:0, adminRate:0, discount:0, taxRate:10, roundDown:true, showBreak:false},
+    lines:{},   // [記号id]: {cat,name,spec,work,qty,off,user}（ユーザー上書きのみ保持）
+    wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}} };
+}
+let estimate = defaultEstimate();
 
 const stage=document.getElementById('stage');
 const world=document.getElementById('world');
 const overlay=document.getElementById('overlay');
 const symg=document.getElementById('symg');
 const calibg=document.getElementById('calibg');
+const layoutg=document.getElementById('layoutg');
+const wireg=document.getElementById('wireg');
 const baseimg=document.getElementById('baseimg');
 const baseEl=document.getElementById('base');
 
@@ -371,6 +595,8 @@ function symById(id){return SYMBOLS.find(s=>s.id===id);}
   });
 })();
 function setTool(id){
+  if(layoutMode) endLayout();
+  if(wireMode) endWireMode();
   curTool=id; selUid=null; renderSel();
   document.querySelectorAll('.palbtn').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
   stage.classList.toggle('placing',!!id && !calibMode);
@@ -437,24 +663,36 @@ async function loadPDF(file){
 }
 
 // ============ シンボル配置・描画 ============
-function addSymbol(type,x,y){
-  placed.push({uid:uidSeq++,type,x:Math.round(x),y:Math.round(y),rot:0});
-  renderSyms(); renderTally();
+// placed へ 1点追加し uid を返す（描画しない＝一括配置用）
+function pushSymbol(type,x,y,meta){
+  const p={uid:uidSeq++,type,x:Math.round(x),y:Math.round(y),rot:0};
+  if(meta) Object.assign(p,meta);
+  placed.push(p);
+  return p.uid;
 }
+function addSymbol(type,x,y){ pushSymbol(type,x,y); renderSyms(); renderTally(); }
 function renderSyms(){
   const SZ=40; // シンボル基準サイズ(px, world)
   symg.innerHTML=placed.map(p=>{
     const s=symById(p.type); if(!s)return '';
     const cx=p.x, cy=p.y;
     const sel=(p.uid===selUid)?' sel':'';
-    return `<g class="sym${sel}" data-uid="${p.uid}" transform="translate(${cx},${cy}) rotate(${p.rot})" style="color:${s.color}">
+    const wp=(p.uid===wirePendA)?' wpend':'';
+    return `<g class="sym${sel}${wp}" data-uid="${p.uid}" transform="translate(${cx},${cy}) rotate(${p.rot})" style="color:${s.color}">
+      <rect x="${-SZ/2}" y="${-SZ/2}" width="${SZ}" height="${SZ}" fill="none" pointer-events="all"/>
       <rect class="selbox" x="${-SZ/2-4}" y="${-SZ/2-4}" width="${SZ+8}" height="${SZ+8}" rx="4" fill="rgba(226,69,43,.1)" stroke="#E2452B" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+      <circle class="wpendmark" cx="0" cy="0" r="${SZ/2+3}" fill="none" stroke="#26C6DA" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
       <g transform="translate(${-SZ/2},${-SZ/2})"><use href="#sym-${s.id}"/></g>
     </g>`;
   }).join('');
   symg.querySelectorAll('.sym').forEach(g=>{
-    g.addEventListener('pointerdown',ev=>{ ev.stopPropagation(); startDragSym(ev, +g.dataset.uid); });
+    g.addEventListener('pointerdown',ev=>{
+      if(layoutMode||calibMode||curTool) return; // 較正/配灯/配置中は stage に委譲（記号の上でも対角点タップ・重ね置きできる）
+      if(wireMode){ ev.stopPropagation(); handleWireSymTap(+g.dataset.uid); return; }
+      ev.stopPropagation(); startDragSym(ev, +g.dataset.uid);
+    });
   });
+  renderWires();
 }
 function renderSel(){
   const bar=document.getElementById('selbar');
@@ -465,7 +703,7 @@ function renderSel(){
 }
 document.getElementById('sel-rotL').onclick=()=>rotateSel(-15);
 document.getElementById('sel-rotR').onclick=()=>rotateSel(15);
-document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; placed=placed.filter(x=>x.uid!==selUid); selUid=null; renderSyms(); renderSel(); renderTally(); };
+document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; placed=placed.filter(x=>x.uid!==selUid); wires=wires.filter(w=>w.a!==selUid&&w.b!==selUid); selUid=null; renderSyms(); renderSel(); renderTally(); renderWireInfo(); };
 function rotateSel(d){ const p=placed.find(x=>x.uid===selUid); if(!p)return; p.rot=(p.rot+d)%360; renderSyms(); }
 
 // ============ ポインタ操作（配置/選択/移動/パン/較正） ============
@@ -473,6 +711,8 @@ let dragSym=null, dragMoved=false, panStart=null;
 
 stage.addEventListener('pointerdown',ev=>{
   if(calibMode){ handleCalibClick(ev); return; }
+  if(layoutMode){ handleLayoutClick(ev); return; }
+  if(wireMode && wirePendA!=null){ wirePendA=null; renderSyms(); } // 空白タップで結線1点目を解除（パンは継続）
   if(curTool){ // 配置モード：置く
     const w=toWorld(ev.clientX,ev.clientY);
     addSymbol(curTool,w.x,w.y);
@@ -484,6 +724,7 @@ stage.addEventListener('pointerdown',ev=>{
   stage.setPointerCapture(ev.pointerId);
 });
 stage.addEventListener('pointermove',ev=>{
+  if(layoutMode){ if(layoutPts.length===1 && !layoutDraft) drawRubber(toWorld(ev.clientX,ev.clientY)); return; }
   if(dragSym){
     const w=toWorld(ev.clientX,ev.clientY);
     dragSym.x=Math.round(w.x); dragSym.y=Math.round(w.y); dragMoved=true; renderSyms(); return;
@@ -493,11 +734,11 @@ stage.addEventListener('pointermove',ev=>{
   }
 });
 stage.addEventListener('pointerup',ev=>{
-  if(dragSym){ dragSym=null; if(!dragMoved){ /* タップのみ＝選択維持 */ } renderTally(); }
+  if(dragSym){ dragSym=null; renderTally(); if(dragMoved) renderWireInfo(); }
   if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y); if(moved<4){ selUid=null; renderSyms(); renderSel(); } panStart=null; stage.classList.remove('panning'); }
 });
 function startDragSym(ev,uid){
-  if(curTool||calibMode)return;
+  if(curTool||calibMode||layoutMode||wireMode)return;
   selUid=uid; renderSyms(); renderSel();
   dragSym=placed.find(x=>x.uid===uid); dragMoved=false;
   stage.setPointerCapture(ev.pointerId);
@@ -508,6 +749,7 @@ stage.addEventListener('wheel',ev=>{ ev.preventDefault(); const r=stage.getBound
 // ============ 縮尺較正 ============
 document.getElementById('btn-calib').onclick=()=>{
   if(!baseSrc && placed.length===0){ toast('先に図面を開いてください'); return; }
+  if(layoutMode) endLayout();
   calibMode=true; calibPts=[]; setTool(null); stage.classList.add('calib');
   setHint('<b>縮尺設定：</b>図面上で基準になる2点をタップしてください（1点目→2点目）。');
   calibg.innerHTML='';
@@ -536,6 +778,984 @@ document.getElementById('calib-ok').onclick=()=>{
 document.getElementById('calib-cancel').onclick=endCalib;
 function endCalib(){ calibMode=false; document.getElementById('modal').classList.remove('show'); stage.classList.remove('calib'); calibg.innerHTML=''; calibPts=[]; setHint('左のシンボルを選ぶ→図面をタップで配置。'); }
 
+// ============ 自動配灯（照明の均等配置 / Step B） ============
+const LIGHT_TYPES = SYMBOLS.filter(s=>s.cat==='照明');
+// 用途別 設計照度の目安（JIS Z 9110）
+const USE_E = [['事務室',750],['会議室',500],['店舗',500],['住宅 居間',200],['住宅 台所',300],
+  ['教室',500],['廊下・階段',150],['便所',150],['倉庫',100],['駐車場',75],['工場(精密)',750],['体育館',300]];
+
+function el(id){ return document.getElementById(id); }
+function rectFrom(a,b){ return {x0:Math.min(a.x,b.x), y0:Math.min(a.y,b.y), w:Math.abs(a.x-b.x), h:Math.abs(a.y-b.y)}; }
+function clampCount(v){ let n=Math.round(parseFloat(v)); if(!isFinite(n)||n<1)n=1; return Math.min(n,999); }
+const GHOST_CAP=2000;   // プレビュー(ゴースト)描画の上限点数
+const MAX_TOTAL=5000;   // 一括配置の上限台数
+function pxToM(px){ return mmPerPx ? px*mmPerPx/1000 : null; }
+
+// 目標台数 N を nx×ny に分解（総数≧N かつ縦横ピッチが近くなる格子を選ぶ）
+// スコア = セル正方度（縦横ピッチが等しいほど良い＝主目的）＋ 過剰台数の軽いペナルティ。
+// 正方度を主項にすることで、素数台数×正方形の部屋でも 1×N の一列に退化しない。
+function factorizeGrid(N,W,H){
+  N=Math.min(Math.max(1,Math.ceil(N)), 4000);  // ループと結果を有界化
+  if(N===1) return {nx:1,ny:1};
+  let best=null;
+  for(let nx=1;nx<=N;nx++){
+    const ny=Math.ceil(N/nx);
+    const total=nx*ny;
+    const Sx=W/nx, Sy=H/ny;
+    const score=Math.abs(Math.log(Sx/Sy))+0.2*(total-N); // セル正方度(主) + 過剰台数(従)
+    if(!best||score<best.score) best={nx,ny,score};
+  }
+  return {nx:best.nx,ny:best.ny};
+}
+// 各セル中央の座標配列（確定仕様の式）
+function computeGrid(rect,nx,ny){
+  nx=Math.max(1,Math.round(nx)); ny=Math.max(1,Math.round(ny));
+  const pts=[];
+  for(let j=0;j<ny;j++) for(let i=0;i<nx;i++){
+    pts.push({x:rect.x0+(rect.w/nx)*(i+0.5), y:rect.y0+(rect.h/ny)*(j+0.5)});
+  }
+  return pts;
+}
+
+el('btn-layout').onclick=startLayout;
+function startLayout(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(calibMode) endCalib();
+  setTool(null);                 // 配置ツール解除（layoutMode はまだ false なので endLayout は走らない）
+  layoutMode=true; layoutPts=[]; layoutDraft=null;
+  stage.classList.add('layout');
+  setHint('<b>自動配灯：</b>部屋の対角2点をタップして範囲を指定してください。');
+  paintLayoutLayer();
+}
+function endLayout(){
+  layoutMode=false; layoutPts=[]; layoutDraft=null;
+  stage.classList.remove('layout');
+  el('modal-layout').classList.remove('show');
+  paintLayoutLayer();
+  setHint('左のシンボルを選ぶ→図面をタップで配置。');
+}
+
+function handleLayoutClick(ev){
+  if(layoutDraft) return;        // 設定パネル表示中は図面クリックを無視
+  const w=toWorld(ev.clientX,ev.clientY);
+  layoutPts.push({x:w.x,y:w.y});
+  if(layoutPts.length>=2){
+    const rect=rectFrom(layoutPts[0],layoutPts[1]);
+    if(rect.w<2||rect.h<2){ toast('範囲が小さすぎます。もう一度指定してください'); layoutPts=[]; paintLayoutLayer(); return; }
+    openLayoutModal(rect);
+  } else {
+    paintLayoutLayer();
+  }
+}
+function drawRubber(end){ paintLayoutLayer(end); }
+
+// #layoutg を state から一括描画：確定済み部屋枠 + 進行中の矩形/ゴースト/対角点
+function paintLayoutLayer(rubberEnd){
+  let h='';
+  rooms.forEach(r=>{
+    h+=`<rect class="roomrect" x="${r.x0}" y="${r.y0}" width="${r.w}" height="${r.h}"/>`;
+    const fs=Math.max(10, Math.min(r.w,r.h)*0.05);
+    h+=`<text class="roomlbl" x="${r.x0+4}" y="${r.y0+fs+2}" font-size="${fs.toFixed(0)}">${r.nx}×${r.ny}</text>`;
+  });
+  if(layoutMode){
+    if(layoutDraft){
+      const rc=layoutDraft.rect, s=symById(layoutDraft.type);
+      h+=`<rect class="layoutrect" x="${rc.x0}" y="${rc.y0}" width="${rc.w}" height="${rc.h}"/>`;
+      if(layoutDraft.nx*layoutDraft.ny<=GHOST_CAP){  // 過大時はゴースト省略（フリーズ防止）
+        computeGrid(rc,layoutDraft.nx,layoutDraft.ny).forEach(pt=>{
+          h+=`<g class="ghost" transform="translate(${pt.x},${pt.y})" style="color:${s?s.color:'#E8B23A'}"><g transform="translate(-20,-20)"><use href="#sym-${layoutDraft.type}"/></g></g>`;
+        });
+      }
+    } else if(layoutPts.length===1 && rubberEnd){
+      const rc=rectFrom(layoutPts[0],rubberEnd);
+      h+=`<rect class="layoutrect" x="${rc.x0}" y="${rc.y0}" width="${rc.w}" height="${rc.h}"/>`;
+    }
+    layoutPts.forEach(p=>{ h+=`<circle class="calibpt" cx="${p.x}" cy="${p.y}" r="5" vector-effect="non-scaling-stroke"/>`; });
+  }
+  layoutg.innerHTML=h;
+}
+
+function openLayoutModal(rect){
+  let defType='light';
+  if(curTool && LIGHT_TYPES.some(s=>s.id===curTool)) defType=curTool;
+  layoutDraft={rect, nx:1, ny:1, type:defType, lumen:null};
+  const sel=el('layout-type');
+  sel.innerHTML=LIGHT_TYPES.map(s=>`<option value="${s.id}">${s.nm}</option>`).join('');
+  sel.value=defType;
+  el('layout-nx').value=1; el('layout-ny').value=1;
+  const use=el('lumen-use');
+  use.innerHTML=USE_E.map(([nm,e])=>`<option value="${e}">${nm}（${e}lx）</option>`).join('');
+  el('lumen-E').value=use.value;
+  setupLumenDims();
+  el('lumen-result').innerHTML='';
+  el('modal-layout').classList.add('show');
+  updateInfo();
+}
+function setupLumenDims(){
+  const rc=layoutDraft.rect, lock=el('lumen-lock'), X=el('lumen-X'), Y=el('lumen-Y');
+  if(mmPerPx){
+    X.value=(rc.w*mmPerPx/1000).toFixed(2); Y.value=(rc.h*mmPerPx/1000).toFixed(2);
+    X.disabled=true; Y.disabled=true; lock.style.display='none';
+  } else {
+    X.value=''; Y.value=''; X.disabled=false; Y.disabled=false;
+    lock.style.display='block';
+    lock.textContent='縮尺未設定：室寸[m]を手入力すると計算できます（配置自体は台数指定で可能）。';
+  }
+}
+function updateInfo(){
+  if(!layoutDraft) return;
+  const rc=layoutDraft.rect;
+  const nx=clampCount(el('layout-nx').value), ny=clampCount(el('layout-ny').value);
+  layoutDraft.nx=nx; layoutDraft.ny=ny; layoutDraft.type=el('layout-type').value;
+  const total=nx*ny;
+  let dim, pitch;
+  if(mmPerPx){
+    const Wm=rc.w*mmPerPx/1000, Hm=rc.h*mmPerPx/1000, Sx=Wm/nx, Sy=Hm/ny;
+    dim=`部屋 <b>${Wm.toFixed(2)}×${Hm.toFixed(2)} m</b>`;
+    const bad=(Math.max(Sx,Sy)>3.3||Math.min(Sx,Sy)<2.5);
+    pitch=`ピッチ <b>${Sx.toFixed(2)}×${Sy.toFixed(2)} m</b> <span${bad?' class="warn"':''}>(目安2.5〜3.3m)</span><br>壁際 <b>${(Sx/2).toFixed(2)} / ${(Sy/2).toFixed(2)} m</b>`;
+  } else {
+    dim=`部屋 <b>${Math.round(rc.w)}×${Math.round(rc.h)} px</b>（縮尺未設定）`;
+    pitch=`ピッチ <b>${(rc.w/nx).toFixed(0)}×${(rc.h/ny).toFixed(0)} px</b><br>壁際 <b>${(rc.w/nx/2).toFixed(0)} / ${(rc.h/ny/2).toFixed(0)} px</b>`;
+  }
+  const overWarn = total>GHOST_CAP ? ` <span class="warn">※台数が多すぎます（プレビュー省略）</span>` : '';
+  el('layout-info').innerHTML=`${dim}<br>台数 <b>${nx}×${ny} = ${total}台</b>${overWarn}<br>${pitch}`;
+  paintLayoutLayer();
+}
+
+el('lumen-calc').onclick=()=>{
+  const E=+el('lumen-E').value, F=+el('lumen-F').value, U=+el('lumen-U').value,
+        M=+el('lumen-M').value, H=+el('lumen-H').value, X=+el('lumen-X').value, Y=+el('lumen-Y').value;
+  if(![E,F,U,M,H,X,Y].every(v=>isFinite(v)&&v>0)){ toast('光束法：E・F・U・M・H・X・Y をすべて入力してください'); return; }
+  const A=X*Y;
+  const K=(X*Y)/((X+Y)*H);
+  const Nreq=Math.ceil(E*A/(F*U*M));
+  const g=factorizeGrid(Nreq, layoutDraft.rect.w, layoutDraft.rect.h);
+  el('layout-nx').value=g.nx; el('layout-ny').value=g.ny;
+  layoutDraft.lumen={E,F,U,M,H,Xm:X,Ym:Y,A,K,Nreq};
+  updateInfo();
+  const total=g.nx*g.ny, Eavg=total*F*U*M/A, rate=Eavg/E*100;
+  const cls=rate<100?'lo':(rate<=130?'ok':'hi');
+  const Sx=X/g.nx, Sy=Y/g.ny, SH=Math.max(Sx,Sy)/H;
+  el('lumen-result').innerHTML=
+    `室指数 K <b>${K.toFixed(2)}</b>　必要台数 <b>${Nreq}台</b><br>`+
+    `割付 <b>${g.nx}×${g.ny} = ${total}台</b><br>`+
+    `計算平均照度 <b>${Eavg.toFixed(0)} lx</b>　達成率 <b class="${cls}">${rate.toFixed(0)}%</b> (目安100〜130%)<br>`+
+    `ピッチ ${Sx.toFixed(2)}×${Sy.toFixed(2)} m　S/H比 ${SH.toFixed(2)}<br>`+
+    `<span style="opacity:.75">※S≦約1.5H で均整度0.5以上が目安（参考値）。台数は手調整できます。</span>`;
+};
+
+el('layout-cancel').onclick=endLayout;
+el('layout-ok').onclick=commitLayout;
+function commitLayout(){
+  if(!layoutDraft) return;
+  const nx=clampCount(el('layout-nx').value), ny=clampCount(el('layout-ny').value);
+  const type=el('layout-type').value, total=nx*ny;
+  if(total>MAX_TOTAL){ toast(`台数が多すぎます（最大${MAX_TOTAL}台）。範囲か台数を見直してください`); return; }
+  if(total>500 && !confirm(`${total}台を配置します。よろしいですか？`)) return;
+  const rc=layoutDraft.rect;
+  const room={rid:roomSeq++, x0:Math.round(rc.x0), y0:Math.round(rc.y0), w:Math.round(rc.w), h:Math.round(rc.h),
+    nx, ny, type, childUids:[], lumen:layoutDraft.lumen||null};
+  placeRoomLights(room);
+  rooms.push(room);
+  renderSyms(); renderTally();
+  endLayout();
+  toast(`${total}台を配置しました`);
+}
+function placeRoomLights(room){
+  const ids=[];
+  for(let j=0;j<room.ny;j++) for(let i=0;i<room.nx;i++){
+    const x=room.x0+(room.w/room.nx)*(i+0.5);
+    const y=room.y0+(room.h/room.ny)*(j+0.5);
+    ids.push(pushSymbol(room.type,x,y,{roomId:room.rid,gi:i,gj:j}));
+  }
+  room.childUids=ids;
+}
+
+// 設定パネルの入力配線（要素は常設のため初期化時に一度だけ）
+(function(){
+  el('modal-layout').addEventListener('pointerdown',e=>e.stopPropagation()); // stageのパン/配置と干渉させない
+  el('modal-layout').addEventListener('wheel',e=>e.stopPropagation(),{passive:true}); // stageのズームに吸われずパネル内スクロール
+  ['layout-nx','layout-ny'].forEach(id=>el(id).addEventListener('input',updateInfo));
+  el('layout-type').addEventListener('change',updateInfo);
+  document.querySelectorAll('#modal-layout .stepper button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const inp=el('layout-'+b.dataset.step);
+      inp.value=Math.max(1, clampCount(inp.value)+(+b.dataset.d));
+      updateInfo();
+    });
+  });
+  el('lumen-use').addEventListener('change',e=>{ el('lumen-E').value=e.target.value; });
+})();
+
+// ============ 自動配線（単線図 / Step C） ============
+function catOf(p){ const s=symById(p.type); return s?s.cat:''; }
+function wireLenPx(w){ const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b); if(!a||!b)return 0; return Math.hypot(a.x-b.x,a.y-b.y); }
+// 手動配線の回路：両端点から決定的に導出（タップ順・再配線に依存しない。両方あれば小さい回路番号）
+function wireCircuitOf(auid,buid){
+  const a=placed.find(p=>p.uid===auid), b=placed.find(p=>p.uid===buid);
+  const ca=(a&&a.circuit!=null)?a.circuit:null, cb=(b&&b.circuit!=null)?b.circuit:null;
+  if(ca!=null&&cb!=null) return Math.min(ca,cb);
+  return ca!=null?ca:(cb!=null?cb:0);
+}
+
+// 近接クラスタリング（union-find）：閾値内で連結する点を同一グループに
+function clusterByProximity(items, thr){
+  const n=items.length; if(!n) return [];
+  const par=[...Array(n).keys()];
+  const find=i=>{ while(par[i]!==i){ par[i]=par[par[i]]; i=par[i]; } return i; };
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+    if(Math.hypot(items[i].x-items[j].x, items[i].y-items[j].y)<=thr) par[find(i)]=find(j);
+  }
+  const g={}; items.forEach((it,i)=>{ const r=find(i); (g[r]=g[r]||[]).push(it); });
+  return Object.values(g);
+}
+// 最小全域木（Prim）：点群を最短の総配線長で数珠つなぎする辺 [[uidA,uidB],...]
+function mstEdges(pts){
+  const n=pts.length; if(n<2) return [];
+  const inT=new Array(n).fill(false), dist=new Array(n).fill(Infinity), near=new Array(n).fill(0), edges=[];
+  inT[0]=true; dist[0]=0;
+  for(let i=1;i<n;i++){ dist[i]=Math.hypot(pts[i].x-pts[0].x,pts[i].y-pts[0].y); near[i]=0; }
+  for(let c=1;c<n;c++){
+    let best=-1,bd=Infinity;
+    for(let i=0;i<n;i++) if(!inT[i]&&dist[i]<bd){ bd=dist[i]; best=i; }
+    if(best<0) break;
+    inT[best]=true; edges.push([pts[near[best]].uid, pts[best].uid]);
+    for(let i=0;i<n;i++) if(!inT[i]){
+      const d=Math.hypot(pts[i].x-pts[best].x,pts[i].y-pts[best].y);
+      if(d<dist[i]){ dist[i]=d; near[i]=best; }
+    }
+  }
+  return edges;
+}
+
+el('btn-autowire').onclick=autoWire;
+function autoWire(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(!placed.length){ toast('先にシンボルを配置してください'); return; }
+  wires=wires.filter(w=>!w.auto);            // 手動配線は保持
+  placed.forEach(p=>{ p.circuit=null; });
+  const thr = mmPerPx ? 8000/mmPerPx : Math.min(baseW,baseH)*0.28;  // 同一回路とみなす近接閾値（≒8m）
+  let circ=0; const circuits=[];
+  // 照明：部屋(rooms[])ごとに1回路
+  rooms.forEach(r=>{
+    const lts=placed.filter(p=>p.roomId===r.rid && catOf(p)==='照明');
+    if(lts.length){ circ++; lts.forEach(p=>p.circuit=circ); circuits.push({no:circ,devices:lts}); }
+  });
+  // 照明：部屋に属さないものは近接クラスタごとに回路
+  clusterByProximity(placed.filter(p=>catOf(p)==='照明'&&p.circuit==null), thr)
+    .forEach(cl=>{ circ++; cl.forEach(p=>p.circuit=circ); circuits.push({no:circ,devices:cl}); });
+  // コンセント：近接クラスタごとに回路
+  clusterByProximity(placed.filter(p=>catOf(p)==='コンセント'), thr)
+    .forEach(cl=>{ circ++; cl.forEach(p=>p.circuit=circ); circuits.push({no:circ,devices:cl}); });
+  // 各回路を最近傍で数珠つなぎ（MST）
+  circuits.forEach(c=>{
+    mstEdges(c.devices.map(p=>({uid:p.uid,x:p.x,y:p.y}))).forEach(([a,b])=>
+      wires.push({uid:wireSeq++,a,b,circuit:c.no,kind:'feed',auto:true}));
+  });
+  // 分電盤/配電盤があれば各回路の最寄り機器へ電源送り
+  const panels=placed.filter(p=>p.type==='panelD'||p.type==='panelH');
+  if(panels.length){
+    circuits.forEach(c=>{
+      let best=null;
+      c.devices.forEach(d=>panels.forEach(pn=>{ const dd=Math.hypot(d.x-pn.x,d.y-pn.y); if(!best||dd<best.dd) best={dd,dev:d,pn}; }));
+      if(best) wires.push({uid:wireSeq++,a:best.pn.uid,b:best.dev.uid,circuit:c.no,kind:'power',auto:true});
+    });
+  }
+  // スイッチ→最寄り照明を結線（JB結線は省略＝実務の見やすい単線図）
+  const lights=placed.filter(p=>catOf(p)==='照明');
+  placed.filter(p=>catOf(p)==='スイッチ').forEach(sw=>{
+    let best=null; lights.forEach(l=>{ const d=Math.hypot(sw.x-l.x,sw.y-l.y); if(!best||d<best.d) best={d,l}; });
+    if(best){ sw.circuit=best.l.circuit; wires.push({uid:wireSeq++,a:sw.uid,b:best.l.uid,circuit:best.l.circuit,kind:'sw',auto:true}); }
+  });
+  // 手動配線は端点の新しい回路に追従（回路別集計・色の不整合を防ぐ。両端点から決定的に導出）
+  wires.filter(w=>!w.auto).forEach(w=>{ w.circuit=wireCircuitOf(w.a,w.b); });
+  renderSyms(); renderWireInfo();
+  toast(circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません');
+}
+
+function renderWires(){
+  if(!wireg) return;
+  wireg.innerHTML=wires.map(w=>{
+    const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+    if(!a||!b) return '';
+    const col=circuitColor(w.circuit);
+    return `<line class="wirehit" data-uid="${w.uid}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#000" stroke-opacity="0" stroke-width="16" pointer-events="stroke" vector-effect="non-scaling-stroke"/>`+
+           `<line class="wire" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  }).join('');
+  wireg.querySelectorAll('.wirehit').forEach(ln=>{
+    ln.addEventListener('pointerdown',ev=>{ if(!wireMode) return; ev.stopPropagation(); deleteWire(+ln.dataset.uid); });
+  });
+}
+function renderWireInfo(){
+  const host=document.getElementById('wireinfo');
+  if(!wires.length){ host.innerHTML=''; return; }
+  const cal=mmPerPx!=null;
+  const byC={}; wires.forEach(w=>{ byC[w.circuit]=(byC[w.circuit]||0)+wireLenPx(w); });
+  let total=0, rows='';
+  Object.keys(byC).map(Number).sort((a,b)=>a-b).forEach(c=>{
+    const len=byC[c]; total+=len;
+    const val=cal ? (len*mmPerPx/1000).toFixed(1)+' m' : Math.round(len)+' px';
+    rows+=`<tr><td><span class="sw" style="background:${circuitColor(c)}"></span>${c?('回路'+c):'手動/未割当'}</td><td class="n">${val}</td></tr>`;
+  });
+  const tv=cal ? (total*mmPerPx/1000).toFixed(1)+' m' : Math.round(total)+' px';
+  host.innerHTML=`<div class="witit">配線 <b>${wires.length}</b>本 ／ 配線長合計 <b>${tv}</b>${cal?'':'（縮尺未設定）'}</div><table class="tly">${rows}</table>`;
+}
+
+el('btn-wire').onclick=toggleWireMode;
+function toggleWireMode(){ wireMode ? endWireMode() : startWireMode(); }
+function startWireMode(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(calibMode) endCalib();
+  if(layoutMode) endLayout();
+  setTool(null);            // curTool 解除（wireMode はまだ false なので endWireMode は走らない）
+  wireMode=true; wirePendA=null;
+  stage.classList.add('wire');
+  el('btn-wire').classList.add('on');
+  setHint('<b>配線編集：</b>2つのシンボルを順にタップで結線。配線をタップで削除。空白タップで選択解除。');
+  renderSyms();
+}
+function endWireMode(){
+  wireMode=false; wirePendA=null;
+  stage.classList.remove('wire');
+  el('btn-wire').classList.remove('on');
+  renderSyms();
+  setHint('左のシンボルを選ぶ→図面をタップで配置。');
+}
+function handleWireSymTap(uid){
+  if(wirePendA!=null && !placed.find(p=>p.uid===wirePendA)) wirePendA=null; // 欠落した1点目は破棄
+  if(wirePendA==null){ wirePendA=uid; renderSyms(); toast('接続先のシンボルをタップ'); return; }
+  if(wirePendA===uid){ wirePendA=null; renderSyms(); return; }      // 同じをもう一度でキャンセル
+  if(wires.some(w=>(w.a===wirePendA&&w.b===uid)||(w.a===uid&&w.b===wirePendA))){ toast('その2点は既に結線済みです'); wirePendA=null; renderSyms(); return; }
+  wires.push({uid:wireSeq++, a:wirePendA, b:uid, circuit:wireCircuitOf(wirePendA,uid), kind:'manual', auto:false});
+  wirePendA=null; renderSyms(); renderWireInfo();
+}
+function deleteWire(uid){ wires=wires.filter(w=>w.uid!==uid); renderWires(); renderWireInfo(); }
+
+// ============ 見積（配置数＋配線長 → 品目マッピング → 岐阜県単価マスタ照合 / Step D） ============
+// 記号id → マスタ検索(cats/keyword)。specは候補から選択。
+const SYMMAP={
+  light:{cats:['照明器具'],kw:['LED','直付','ベースライト'],unit:'個'},
+  base_lt:{cats:['照明器具'],kw:['LED','直付','ベースライト'],unit:'個'},
+  fujikasa:{cats:['照明器具'],kw:['LED','直付','ベースライト'],unit:'個'},
+  down:{cats:['照明器具'],kw:['ダウンライト'],unit:'個'},
+  ceiling:{cats:['照明器具'],kw:['直付天井灯'],unit:'個'},
+  pendant:{cats:['照明器具'],kw:['ペンダント'],unit:'個'},
+  chande:{cats:['照明器具'],kw:['シャンデリヤ'],unit:'個'},
+  bracket:{cats:['照明器具'],kw:['ブラケット'],unit:'個'},
+  exit:{cats:['照明器具'],kw:['誘導灯'],unit:'個'},
+  emg_inc:{cats:['照明器具'],kw:['非常用'],unit:'個'},
+  emg_fl:{cats:['照明器具'],kw:['非常用'],unit:'個'},
+  outlet:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],pref:'2P 15A×1',unit:'個'},
+  outlet2p:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],pref:'2P 15A×2',unit:'個'},
+  outletE:{cats:['スイッチ・コンセント'],kw:['コンセント','接地極'],unit:'個'},
+  outletET:{cats:['スイッチ・コンセント'],kw:['コンセント','接地端子'],unit:'個'},
+  outletLK:{cats:['スイッチ・コンセント'],kw:['コンセント','抜'],unit:'個'},
+  outletW:{cats:['スイッチ・コンセント'],kw:['防水コンセント'],unit:'個'},
+  outlet2P:{cats:['スイッチ・コンセント'],kw:['コンセント','200'],unit:'個'},
+  outlet3P:{cats:['スイッチ・コンセント'],kw:['コンセント','3P'],unit:'個'},
+  outletF:{cats:['スイッチ・コンセント'],kw:['アップコンセント'],unit:'個'},
+  sw:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ'],pref:'1P 15A×1',unit:'個'},
+  sw3:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','3w'],unit:'個'},
+  sw4:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','4w'],unit:'個'},
+  swP:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','pl'],unit:'個'},
+  swL:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','pl'],unit:'個'},
+  swDim:{cats:['スイッチ・コンセント'],kw:['調光'],unit:'個'},
+  swW:{cats:['スイッチ・コンセント'],kw:['防水形スイッチ'],unit:'個'},
+  swAuto:{cats:['スイッチ・コンセント'],kw:['自動点滅'],unit:'個'},
+  panelD:{cats:['分電盤・開閉器'],kw:['分電盤'],unit:'面'},
+  panelH:{cats:['分電盤・開閉器','受変電設備'],kw:['分電盤'],unit:'面'},
+  panelC:{cats:['分電盤・開閉器','受変電設備','住宅・換気・空調設備'],kw:['制御盤'],unit:'面'},
+  motor:{cats:['住宅・換気・空調設備','取付け費'],kw:['電動機'],unit:'台'},
+  fan:{cats:['住宅・換気・空調設備'],kw:['換気扇'],unit:'台'},
+  lan:{cats:['スイッチ・コンセント','弱電機器（インターホン・TV等）'],kw:['情報用モジュラージャック'],unit:'個'},
+  tv:{cats:['弱電機器（インターホン・TV等）'],kw:['テレビ端子'],unit:'個'},
+  tel:{cats:['スイッチ・コンセント'],kw:['電話用モジュラージャック'],unit:'個'},
+  smoke:{cats:['火災報知・ガス漏れ'],kw:['煙感知器'],unit:'個'},
+  heat:{cats:['火災報知・ガス漏れ'],kw:['スポット感知器'],unit:'個'},
+  callP:{cats:['火災報知・ガス漏れ'],kw:['発信機'],unit:'個'},
+  ind:{cats:['火災報知・ガス漏れ'],kw:['表示灯'],unit:'個'},
+  bell:{cats:['火災報知・ガス漏れ'],kw:['警報ベル'],unit:'個'},
+  jb:{cats:['スイッチ・コンセント','ボックス・貫通処理'],kw:['ジョイントボックス'],unit:'個'},
+  ob:{cats:['ボックス・貫通処理'],kw:['アウトレットボックス'],unit:'個'},
+  pb:{cats:['ボックス・貫通処理'],kw:['プルボックス'],unit:'個'},
+  riser:null,   // 立上り＝配線付随。品目化しない
+};
+const CABLE_CAT='ケーブル（強電）', CABLE_NAME='ケーブル', CONDUIT_CAT='電線管・ダクト・線ぴ';
+const WIRE_DEF={ lighting:{label:'配線 照明系',spec:'VVF 1.6mm -2C'}, outlet:{label:'配線 コンセント系',spec:'VVF 2.0mm -2C'}, feeder:{label:'配線 電源送り',spec:'VVF 2.0mm -2C'} };
+
+const SEP=String.fromCharCode(1);   // byNameキー・仕様値の区切り（データに現れない制御文字）
+function normStr(s){ return String(s==null?'':s).normalize('NFKC').toLowerCase().replace(/[\s　・（）()･]/g,''); }
+function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return escHtml(s).replace(/"/g,'&quot;'); }
+function yen(n){ return Math.round(n||0).toLocaleString('ja-JP'); }
+function rnd(v){ return estimate.opts.roundDown ? Math.floor(v||0) : Math.round(v||0); }
+
+async function loadMaster(){
+  if(MASTER) return MASTER;
+  if(masterLoading) return masterLoading;
+  masterLoading=(async()=>{
+    for(const url of ['./unit_prices.json','https://kawaguchidenki001.github.io/tanka-search/unit_prices.json']){
+      try{ const res=await fetch(url); if(res.ok){ const j=await res.json(); if(Array.isArray(j)&&j.length){ setMaster(j); return MASTER; } } }catch(e){}
+    }
+    masterLoading=null; throw new Error('master fetch failed');
+  })();
+  return masterLoading;
+}
+function setMaster(arr){ MASTER=arr; buildMasterIndex(); }
+function buildMasterIndex(){
+  const byCat=new Map(), byName=new Map();
+  MASTER.forEach(r=>{
+    r._n=normStr(r.name+' '+r.spec+' '+(r.note||''));
+    if(!byCat.has(r.category)) byCat.set(r.category,[]);
+    byCat.get(r.category).push(r);
+    const key=r.category+SEP+r.name;
+    if(!byName.has(key)) byName.set(key,[]);
+    byName.get(key).push(r);
+  });
+  MASTER_IDX={byCat, byName, cats:[...byCat.keys()].sort()};
+}
+function medianRec(cat,name){ const g=MASTER_IDX.byName.get(cat+SEP+name); if(!g||!g.length)return null; const a=g.slice().sort((x,y)=>x.composite_price-y.composite_price); return a[Math.floor(a.length/2)]; }
+function findRec(sel){
+  if(!sel||!MASTER_IDX) return null;
+  const g=MASTER_IDX.byName.get(sel.cat+SEP+sel.name); if(!g) return null;
+  if(sel.idx!=null && g[sel.idx] && g[sel.idx].spec===sel.spec && (sel.work==null||g[sel.idx].work===sel.work)) return g[sel.idx];
+  return g.find(r=>r.spec===sel.spec && (sel.work==null||r.work===sel.work)) || g.find(r=>r.spec===sel.spec) || null;
+}
+function candidatesFor(id){
+  const m=SYMMAP[id]; if(!m||!MASTER_IDX) return [];
+  const kws=m.kw.map(normStr);
+  let pool=[]; m.cats.forEach(c=>{ const a=MASTER_IDX.byCat.get(c); if(a) pool=pool.concat(a); });
+  return pool.map(r=>{ let s=0; kws.forEach(k=>{ if(r._n.includes(k)) s+=5; }); if(m.unit&&r.unit!==m.unit) s-=3; if(r.category.includes('再使用')) s-=6; return {r,s}; })
+    .filter(x=>x.s>0).sort((a,b)=>b.s-a.s).map(x=>x.r);
+}
+function scoreRec(m,r){ let s=0; m.kw.map(normStr).forEach(k=>{ if(r._n.includes(k)) s+=5; }); if(m.unit&&r.unit!==m.unit) s-=3; if(r.category.includes('再使用')) s-=6; return s; }
+function defaultSel(id){
+  const m=SYMMAP[id]; if(!m||!MASTER_IDX) return null;
+  const c=candidatesFor(id); if(!c.length) return null;
+  const top=scoreRec(m,c[0]);                    // 最上位スコア(=キーワード最多一致)の記号を採用
+  const cat=c[0].category, name=c[0].name;
+  const sub=c.filter(r=>r.category===cat&&r.name===name&&scoreRec(m,r)===top);
+  const arr=(sub.length?sub:c.filter(r=>r.category===cat&&r.name===name)).slice().sort((a,b)=>a.composite_price-b.composite_price);
+  // pref 指定があれば標準仕様を優先、無ければ中央値（極端な最安/最高額を避ける）
+  const rec=(m.pref && (sub.find(r=>r.spec===m.pref)||arr.find(r=>r.spec===m.pref))) || arr[Math.floor(arr.length/2)];
+  return {cat,name,spec:rec.spec,work:rec.work};
+}
+function defaultCableSel(specHint){
+  const g=MASTER_IDX&&MASTER_IDX.byName.get(CABLE_CAT+SEP+CABLE_NAME); if(!g) return null;
+  const hn=normStr(specHint); const m=g.filter(r=>normStr(r.spec).includes(hn));
+  const a=(m.length?m:g).slice().sort((x,y)=>x.composite_price-y.composite_price); const rec=a[Math.floor(a.length/2)];
+  return {cat:CABLE_CAT,name:CABLE_NAME,spec:rec.spec,work:rec.work};
+}
+function defaultConduitSel(){
+  if(!MASTER_IDX) return null;
+  for(const nm of ['合成樹脂製可とう電線管','電線管']){
+    const g=MASTER_IDX.byName.get(CONDUIT_CAT+SEP+nm);
+    if(g&&g.length){ const a=g.slice().sort((x,y)=>x.composite_price-y.composite_price); const rec=a[Math.floor(a.length/2)]; return {cat:CONDUIT_CAT,name:nm,spec:rec.spec,work:rec.work}; }
+  }
+  return null;
+}
+function wireGroup(w){
+  if(w.kind==='power') return 'feeder';
+  const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+  if((a&&catOf(a)==='コンセント')||(b&&catOf(b)==='コンセント')) return 'outlet';
+  return 'lighting';
+}
+function storeFor(id){
+  if(id.startsWith('wire:')){ const g=id.slice(5); return estimate.wire.groups[g]||(estimate.wire.groups[g]={}); }
+  if(id.startsWith('conduit:')) return estimate.wire.conduit||(estimate.wire.conduit={});
+  const t=id.slice(4); return estimate.lines[t]||(estimate.lines[t]={});
+}
+function buildRows(){
+  const rows=[]; if(!MASTER_IDX) return rows;
+  const counts={}; placed.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
+  Object.keys(counts).forEach(type=>{
+    if(!SYMMAP[type]) return; const s=symById(type); if(!s) return;
+    const ln=estimate.lines[type]||{};
+    const sel=(ln.user&&ln.name)?{cat:ln.cat,name:ln.name,spec:ln.spec,work:ln.work}:defaultSel(type);
+    const rec=sel?findRec(sel):null;
+    const autoQty=counts[type]; const qty=(ln.qty!=null)?ln.qty:autoQty;
+    rows.push({id:'sym:'+type,kind:'device',label:s.nm,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:(SYMMAP[type].unit||''),autoQty,qty,off:!!ln.off,user:!!ln.user});
+  });
+  const glen={lighting:0,outlet:0,feeder:0};
+  wires.forEach(w=>{ glen[wireGroup(w)]+=wireLenPx(w); });
+  ['lighting','outlet','feeder'].forEach(g=>{
+    if(glen[g]<=0) return;
+    const wl=estimate.wire.groups[g]||{};
+    const sel=(wl.user&&wl.name)?{cat:wl.cat,name:wl.name,spec:wl.spec,work:wl.work}:defaultCableSel(WIRE_DEF[g].spec);
+    const rec=sel?findRec(sel):null;
+    let qtyM=null;
+    if(mmPerPx!=null) qtyM=(glen[g]*mmPerPx/1000)*(1+(estimate.wire.slack||0)/100);
+    else if(estimate.wire.manualLen[g]!=null) qtyM=estimate.wire.manualLen[g]*(1+(estimate.wire.slack||0)/100);
+    const autoQty=qtyM!=null?Math.round(qtyM*10)/10:null;
+    const qty=(wl.qty!=null)?wl.qty:autoQty;
+    rows.push({id:'wire:'+g,kind:'wire',label:WIRE_DEF[g].label,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!wl.off,user:!!wl.user,uncal:(mmPerPx==null&&estimate.wire.manualLen[g]==null)});
+  });
+  if(estimate.wire.conduitOn && mmPerPx!=null){
+    const tot=glen.lighting+glen.outlet+glen.feeder;
+    if(tot>0){
+      const cw=estimate.wire.conduit||{};
+      const sel=(cw.user&&cw.name)?{cat:cw.cat,name:cw.name,spec:cw.spec,work:cw.work}:defaultConduitSel();
+      const rec=sel?findRec(sel):null;
+      const autoQty=Math.round((tot*mmPerPx/1000)*(1+(estimate.wire.slack||0)/100)*10)/10;
+      const qty=(cw.qty!=null)?cw.qty:autoQty;
+      rows.push({id:'conduit:all',kind:'wire',label:'電線管',cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!cw.off,user:!!cw.user});
+    }
+  }
+  return rows;
+}
+function computeTotals(rows){
+  let mat=0,lab=0,exp=0,direct=0;
+  rows.forEach(r=>{ if(r.off||!r.rec||r.qty==null) return; mat+=rnd(r.qty*r.rec.material_cost); lab+=rnd(r.qty*r.rec.labor_cost); exp+=rnd(r.qty*r.rec.expense); direct+=rnd(r.qty*r.rec.composite_price); });
+  const site=rnd(direct*(estimate.opts.siteRate||0)/100);
+  const admin=rnd((direct+site)*(estimate.opts.adminRate||0)/100);
+  const discount=Math.min(Math.max(0,estimate.opts.discount||0), direct+site+admin);
+  const taxable=direct+site+admin-discount;
+  const tax=rnd(taxable*(estimate.opts.taxRate||0)/100);
+  return {mat,lab,exp,direct,site,admin,discount,taxable,tax,total:taxable+tax};
+}
+function opt(v,label,sel){ return `<option value="${escAttr(v)}"${sel?' selected':''}>${escHtml(label)}</option>`; }
+function catSelectHtml(r){ const cur=r.sel?r.sel.cat:''; return `<select data-dim="cat" data-id="${escAttr(r.id)}">`+MASTER_IDX.cats.map(c=>opt(c,c,c===cur)).join('')+`</select>`; }
+function nameSelectHtml(r){ const cat=r.sel?r.sel.cat:'',cur=r.sel?r.sel.name:''; const ns=(cat&&MASTER_IDX.byCat.get(cat))?[...new Set(MASTER_IDX.byCat.get(cat).map(x=>x.name))]:[]; return `<select data-dim="name" data-id="${escAttr(r.id)}">`+ns.map(n=>opt(n,n,n===cur)).join('')+`</select>`; }
+function specSelectHtml(r){ const cat=r.sel?r.sel.cat:'',name=r.sel?r.sel.name:''; const g=(cat&&name)?(MASTER_IDX.byName.get(cat+SEP+name)||[]):[]; const curIdx=r.rec?g.indexOf(r.rec):-1; return `<select data-dim="spec" data-id="${escAttr(r.id)}">`+g.map((rec,i)=>{ const lbl=(rec.spec||'(規格なし)')+(rec.work?' ｜ '+rec.work:'')+(rec.note?' ｜ '+rec.note:'')+'  ¥'+rec.composite_price.toLocaleString('ja-JP'); return opt(String(i),lbl,i===curIdx); }).join('')+`</select>`; }
+
+el('btn-estimate').onclick=openEstimate;
+el('e-close').onclick=()=>el('modal-estimate').classList.remove('show');
+el('e-csv').onclick=exportEstimateCSV;
+el('e-loadmaster').onclick=()=>el('file-unit').click();
+el('file-unit').addEventListener('change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const j=JSON.parse(r.result); if(Array.isArray(j)&&j.length){ setMaster(j); setMasterChip('ok'); el('e-loadmaster').style.display='none'; renderEstimate(); } else toast('形式が不正です'); }catch(err){ toast('読み込めませんでした'); } }; r.readAsText(f); });
+
+function openEstimate(){ syncEstimateInputs(); el('modal-estimate').classList.add('show'); if(MASTER_IDX){ renderEstimate(); } else { loadMasterUI(); } }
+function syncEstimateInputs(){
+  el('eo-site').value=estimate.opts.siteRate; el('eo-admin').value=estimate.opts.adminRate;
+  el('eo-disc').value=estimate.opts.discount||0; el('eo-tax').value=estimate.opts.taxRate;
+  el('eo-slack').value=estimate.wire.slack; el('eo-round').checked=estimate.opts.roundDown;
+  el('eo-break').checked=estimate.opts.showBreak; el('eo-conduit').checked=estimate.wire.conduitOn;
+  el('eh-name').value=estimate.head.name; el('eh-to').value=estimate.head.to; el('eh-no').value=estimate.head.no; el('eh-date').value=estimate.head.date;
+}
+function setMasterChip(state){
+  const c=el('emaster'); c.className='echip'+(state==='ok'?' ok':state==='err'?' err':'');
+  c.textContent = state==='ok' ? `単価マスタ ${MASTER.length.toLocaleString('ja-JP')}件` : state==='err' ? 'マスタ取得失敗（ファイル選択）' : '単価マスタ 読込中…';
+}
+function loadMasterUI(){ setMasterChip('loading'); loadMaster().then(()=>{ setMasterChip('ok'); renderEstimate(); }).catch(()=>{ setMasterChip('err'); el('e-loadmaster').style.display=''; renderEstimate(); }); }
+
+function renderEstimate(){
+  const body=el('ebody');
+  if(!MASTER_IDX){ body.innerHTML='<div id="enote" style="border:none">単価マスタを読み込んでください。</div>'; el('etot').innerHTML=''; return; }
+  const rows=buildRows();
+  if(!rows.length){ body.innerHTML='<div id="enote" style="border:none">配置がありません。シンボルを配置してから見積を開いてください。</div>'; el('etot').innerHTML=''; return; }
+  const sb=estimate.opts.showBreak;
+  let h='<table class="est"><thead><tr><th></th><th>記号/対象</th><th>分類</th><th>品目</th><th>規格・仕様</th><th class="n">数量</th><th>単位</th>'
+    +(sb?'<th class="n">材料費</th><th class="n">労務費</th><th class="n">経費</th>':'')+'<th class="n">複合単価</th><th class="n">金額</th><th>除外</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const price=r.rec?r.rec.composite_price:0;
+    const amount=(!r.off&&r.rec&&r.qty!=null)?rnd(r.qty*price):0;
+    const dot=r.off?'':(!r.rec?'r':(r.user?'g':'y'));
+    h+=`<tr data-id="${escAttr(r.id)}"${r.off?' style="opacity:.45"':''}>`
+      +`<td>${dot?`<span class="cdot ${dot}"></span>`:''}</td>`
+      +`<td>${escHtml(r.label)}</td>`
+      +`<td>${catSelectHtml(r)}</td><td>${nameSelectHtml(r)}</td><td>${specSelectHtml(r)}</td>`
+      +`<td class="n"><input class="qty" data-id="${escAttr(r.id)}" type="number" min="0" step="${r.kind==='wire'?'0.1':'1'}" value="${r.qty!=null?r.qty:''}"${r.uncal?' disabled placeholder="—"':(r.autoQty!=null?' placeholder="'+r.autoQty+'"':'')}></td>`
+      +`<td>${escHtml(r.unit||'')}</td>`
+      +(sb?`<td class="n" data-mat>${r.rec&&r.qty!=null?yen(r.qty*r.rec.material_cost):''}</td><td class="n" data-lab>${r.rec&&r.qty!=null?yen(r.qty*r.rec.labor_cost):''}</td><td class="n" data-exp>${r.rec&&r.qty!=null?yen(r.qty*r.rec.expense):''}</td>`:'')
+      +`<td class="n">${r.rec?yen(price):'—'}</td>`
+      +`<td class="n" data-amt>${r.off?'除外':(r.uncal?'—':(r.rec?yen(amount):'0'))}</td>`
+      +`<td style="text-align:center"><input type="checkbox" class="eoff" data-id="${escAttr(r.id)}"${r.off?' checked':''}></td></tr>`;
+  });
+  h+='</tbody></table>';
+  body.innerHTML=h;
+  body.querySelectorAll('select[data-dim]').forEach(s=>s.addEventListener('change',onSelChange));
+  body.querySelectorAll('input.qty').forEach(i=>i.addEventListener('input',onQtyInput));
+  body.querySelectorAll('input.eoff').forEach(c=>c.addEventListener('change',onOffChange));
+  renderTotals(rows);
+}
+function renderTotals(rows){
+  const t=computeTotals(rows);
+  el('etot').innerHTML=
+    `<span class="tt">材料費<b>¥${yen(t.mat)}</b></span><span class="tt">労務費<b>¥${yen(t.lab)}</b></span><span class="tt">経費<b>¥${yen(t.exp)}</b></span>`
+    +`<span class="tt">直接工事費<b>¥${yen(t.direct)}</b></span>`
+    +(t.site?`<span class="tt">現場管理費<b>¥${yen(t.site)}</b></span>`:'')
+    +(t.admin?`<span class="tt">一般管理費<b>¥${yen(t.admin)}</b></span>`:'')
+    +(t.discount?`<span class="tt">値引<b>-¥${yen(t.discount)}</b></span>`:'')
+    +`<span class="tt">消費税<b>¥${yen(t.tax)}</b></span>`
+    +`<span class="tt grand">見積合計<b>¥${yen(t.total)}</b></span>`;
+}
+function recalcTotalsOnly(){ renderTotals(buildRows()); }
+function rowSelVal(id,dim){ const s=el('ebody').querySelector(`select[data-dim="${dim}"][data-id="${CSS.escape(id)}"]`); return s?s.value:''; }
+function setSelById(id,sel){ const s=storeFor(id); s.cat=sel.cat; s.name=sel.name; s.spec=sel.spec; s.work=sel.work; s.idx=(sel.idx==null?null:sel.idx); s.user=true; }
+function idxOfRec(cat,name,rec){ const g=MASTER_IDX.byName.get(cat+SEP+name)||[]; return g.indexOf(rec); }
+function onSelChange(e){
+  const id=e.target.dataset.id, dim=e.target.dataset.dim, v=e.target.value;
+  if(dim==='cat'){ const cat=v; const name=[...new Set(MASTER_IDX.byCat.get(cat).map(x=>x.name))][0]; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work,idx:idxOfRec(cat,name,rec)}); }
+  else if(dim==='name'){ const cat=rowSelVal(id,'cat'), name=v; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work,idx:idxOfRec(cat,name,rec)}); }
+  else { const cat=rowSelVal(id,'cat'), name=rowSelVal(id,'name'); const g=MASTER_IDX.byName.get(cat+SEP+name)||[]; const idx=+v; const rec=g[idx]; if(rec) setSelById(id,{cat,name,spec:rec.spec,work:rec.work,idx}); }
+  renderEstimate();
+}
+function onQtyInput(e){
+  const id=e.target.dataset.id; const val=e.target.value.trim(); const v=parseFloat(val);
+  const s=storeFor(id); s.qty=(val!==''&&isFinite(v)&&v>=0)?v:null;   // 空欄=自動数量に戻す
+  patchRowAmount(id); recalcTotalsOnly();
+}
+function patchRowAmount(id){
+  const row=buildRows().find(r=>r.id===id); if(!row) return;
+  const tr=el('ebody').querySelector(`tr[data-id="${CSS.escape(id)}"]`); if(!tr) return;
+  const price=row.rec?row.rec.composite_price:0;
+  const amount=(!row.off&&row.rec&&row.qty!=null)?rnd(row.qty*price):0;
+  const at=tr.querySelector('[data-amt]'); if(at) at.textContent=row.off?'除外':(row.uncal?'—':(row.rec?yen(amount):'0'));
+  const set=(sel,cost)=>{ const c=tr.querySelector(sel); if(c) c.textContent=(row.rec&&row.qty!=null)?yen(row.qty*cost):''; };
+  if(estimate.opts.showBreak && row.rec){ set('[data-mat]',row.rec.material_cost); set('[data-lab]',row.rec.labor_cost); set('[data-exp]',row.rec.expense); }
+}
+function onOffChange(e){ const id=e.target.dataset.id; storeFor(id).off=e.target.checked; renderEstimate(); }
+
+el('eo-site').oninput=()=>{ estimate.opts.siteRate=+el('eo-site').value||0; recalcTotalsOnly(); };
+el('eo-admin').oninput=()=>{ estimate.opts.adminRate=+el('eo-admin').value||0; recalcTotalsOnly(); };
+el('eo-disc').oninput=()=>{ estimate.opts.discount=Math.max(0,+el('eo-disc').value||0); recalcTotalsOnly(); };
+el('eo-tax').oninput=()=>{ estimate.opts.taxRate=+el('eo-tax').value||0; recalcTotalsOnly(); };
+el('eo-slack').oninput=()=>{ estimate.wire.slack=+el('eo-slack').value||0; renderEstimate(); };
+el('eo-round').onchange=()=>{ estimate.opts.roundDown=el('eo-round').checked; renderEstimate(); };
+el('eo-break').onchange=()=>{ estimate.opts.showBreak=el('eo-break').checked; renderEstimate(); };
+el('eo-conduit').onchange=()=>{ estimate.wire.conduitOn=el('eo-conduit').checked; renderEstimate(); };
+['name','to','no','date'].forEach(k=>{ el('eh-'+k).oninput=()=>{ estimate.head[k]=el('eh-'+k).value; }; });
+
+function exportEstimateCSV(){
+  if(!MASTER_IDX){ toast('先に単価マスタを読み込んでください'); return; }
+  const rows=buildRows(), t=computeTotals(rows), out=[];
+  out.push(['工事名',estimate.head.name]); out.push(['宛先',estimate.head.to]);
+  out.push(['見積番号',estimate.head.no,'見積日',estimate.head.date]); out.push([]);
+  out.push(['No','記号/対象','分類','品目','規格・仕様','施工条件','数量','単位','材料費','労務費','経費','複合単価','金額','備考']);
+  let i=0;
+  rows.forEach(r=>{ if(r.off) return; i++; const price=r.rec?r.rec.composite_price:0; const amt=(r.rec&&r.qty!=null)?rnd(r.qty*price):0;
+    out.push([i,r.label,r.cat,r.sel?r.sel.name:'',r.sel?r.sel.spec:'',r.sel?(r.sel.work||''):'',r.qty!=null?r.qty:'',r.unit,
+      r.rec&&r.qty!=null?rnd(r.qty*r.rec.material_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.labor_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.expense):'',price,amt,r.rec?'':'未マッチ']); });
+  out.push([]);
+  const tl=(k,v)=>{ const row=new Array(11).fill(''); row.push(k,v); out.push(row); };
+  tl('材料費計',t.mat); tl('労務費計',t.lab); tl('経費計',t.exp); tl('直接工事費',t.direct);
+  if(t.site)tl('現場管理費('+estimate.opts.siteRate+'%)',t.site);
+  if(t.admin)tl('一般管理費('+estimate.opts.adminRate+'%)',t.admin);
+  if(t.discount)tl('値引',-t.discount);
+  tl('消費税('+estimate.opts.taxRate+'%)',t.tax); tl('見積合計',t.total);
+  out.push([]); out.push(['※単価=複合単価(材+労+直接経費)。丸めにより内訳計と金額は一致しないことがあります。']);
+  out.push(['※現場管理費・一般管理費は工事全体割増で、複合単価内の経費とは二重計上ではありません。']);
+  out.push(['※配線は縮尺較正済みの場合のみ計上します。品目・規格は自動割当のたたき台です。']);
+  const csv='﻿'+out.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  dl(new Blob([csv],{type:'text/csv'}),'mitsumori_'+ts()+'.csv'); toast('見積CSVを書き出しました');
+}
+function csvCell(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+
+// ============ 完成図の書き出し（DXF/JWW/印刷 / Step E） ============
+// 方針: シンボルSVG定義を実行時にCAD中間表現へ変換し、同一の中間表現から
+// DXF(テキスト/Shift-JIS)とJWW(既存バイナリエンジン)の両方を生成する。
+// 座標系: world px(Y下向き) → 実寸mm(Y上向き=CAD)。塗りは三角形ソリッドの扇形分割。
+const CAD_CAT_LAYER={ '照明':['LIGHT',0], 'コンセント':['OUTLET',1], 'スイッチ':['SWITCH',2],
+  '盤・機器':['PANEL',3], '弱電・防災':['ALARM',4], '配線・接続':['BOX',5] };
+const CAD_WIRE_LAYER=['WIRE',6];
+const CAD_TEXT_ASPECT=0.62;   // 文字幅/高さの概算比
+const CAD_FILL_SEGS=16;       // 塗り円の扇形分割数
+
+// --- SVG path "d" → セグメント列（M/L/H/V/A/Z、相対対応、暗黙の繰返し対応） ---
+function parsePathSegs(d){
+  const toks=d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/g)||[];
+  const subs=[]; let cur=null, cmd=null, x=0,y=0, sx=0,sy=0, i=0;
+  const num=()=>parseFloat(toks[i++]);
+  while(i<toks.length){
+    if(/^[A-Za-z]$/.test(toks[i])){
+      cmd=toks[i++];
+      if(cmd==='Z'||cmd==='z'){
+        if(cur){ if(Math.hypot(x-sx,y-sy)>1e-9) cur.segs.push({k:'L',x1:x,y1:y,x2:sx,y2:sy}); cur.closed=true; }
+        x=sx; y=sy; continue;
+      }
+    }
+    if(cmd==null||cmd==='Z'||cmd==='z'){ i++; continue; }   // コマンド未確定/Z後の余剰は読み飛ばし
+    switch(cmd){
+      case 'M': case 'm': {
+        let nx=num(), ny=num(); if(cmd==='m'){ nx+=x; ny+=y; }
+        x=nx; y=ny; sx=x; sy=y;
+        cur={sx:x, sy:y, segs:[], closed:false}; subs.push(cur);
+        cmd=(cmd==='M')?'L':'l';                             // M直後の連続座標は暗黙のL
+        break; }
+      case 'L': case 'l': { let nx=num(), ny=num(); if(cmd==='l'){ nx+=x; ny+=y; }
+        cur.segs.push({k:'L',x1:x,y1:y,x2:nx,y2:ny}); x=nx; y=ny; break; }
+      case 'H': case 'h': { let nx=num(); if(cmd==='h') nx+=x;
+        cur.segs.push({k:'L',x1:x,y1:y,x2:nx,y2:y}); x=nx; break; }
+      case 'V': case 'v': { let ny=num(); if(cmd==='v') ny+=y;
+        cur.segs.push({k:'L',x1:x,y1:y,x2:x,y2:ny}); y=ny; break; }
+      case 'A': case 'a': {
+        const rx=num(), ry=num(); num();                     // x軸回転は円弧では無視
+        const laf=!!num(), fs=!!num();
+        let nx=num(), ny=num(); if(cmd==='a'){ nx+=x; ny+=y; }
+        cur.segs.push({k:'A',x1:x,y1:y,x2:nx,y2:ny,r:(rx+ry)/2,laf,fs}); x=nx; y=ny; break; }
+      default: i++;                                          // 未対応コマンドは安全に無視
+    }
+  }
+  return subs;
+}
+// --- SVG円弧の端点→中心パラメータ化（SVG仕様F.6.5、円弧rx=ry前提） ---
+function arcToCenter(x1,y1,x2,y2,r,laf,fs){
+  const dx=(x1-x2)/2, dy=(y1-y2)/2, d2=dx*dx+dy*dy;
+  if(d2<1e-12||r<=0) return null;
+  let rr=r; if(d2>rr*rr) rr=Math.sqrt(d2);                   // 半径不足はスケールアップ(仕様)
+  let co=Math.sqrt(Math.max(0,(rr*rr-d2)/d2));
+  if(laf===fs) co=-co;
+  const cx=co*dy+(x1+x2)/2, cy=-co*dx+(y1+y2)/2;
+  const a1=Math.atan2(y1-cy,x1-cx), a2=Math.atan2(y2-cy,x2-cx);
+  let da=a2-a1;
+  if(!fs&&da>0) da-=2*Math.PI;
+  if(fs&&da<0) da+=2*Math.PI;
+  return {cx,cy,r:rr,a1,da};
+}
+// --- サブパスをポリゴンへ平坦化（塗り用。円弧はサンプリング） ---
+function flattenSub(sub){
+  const pts=[[sub.sx,sub.sy]];
+  for(const s of sub.segs){
+    if(s.k==='L'){ pts.push([s.x2,s.y2]); continue; }
+    const c=arcToCenter(s.x1,s.y1,s.x2,s.y2,s.r,s.laf,s.fs);
+    if(!c){ pts.push([s.x2,s.y2]); continue; }
+    const n=Math.max(4,Math.ceil(Math.abs(c.da)/(Math.PI/8)));
+    for(let k=1;k<=n;k++){ const a=c.a1+c.da*k/n; pts.push([c.cx+c.r*Math.cos(a), c.cy+c.r*Math.sin(a)]); }
+  }
+  if(pts.length>1&&Math.hypot(pts[0][0]-pts[pts.length-1][0],pts[0][1]-pts[pts.length-1][1])<1e-9) pts.pop();
+  return pts;
+}
+// --- シンボルSVG → CAD中間プリミティブ（シンボルローカル座標 0..40, Y下向き） ---
+let _irCache={};
+function symbolIR(id){
+  if(_irCache[id]) return _irCache[id];
+  const s=symById(id); if(!s) return [];
+  const prims=[];
+  const doc=new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg">'+s.g+'</svg>','image/svg+xml');
+  (function walk(node){
+    for(const e of node.children){
+      const at=n=>e.getAttribute(n), num=n=>parseFloat(e.getAttribute(n)||'0');
+      const fillA=at('fill'), strokeA=at('stroke');
+      const hasFill=fillA!=null&&fillA!=='none', hasStroke=strokeA!=null&&strokeA!=='none';
+      switch(e.tagName){
+        case 'g': walk(e); break;
+        case 'circle': prims.push({k:'circle',cx:num('cx'),cy:num('cy'),r:num('r'),fill:hasFill,stroke:hasStroke}); break;
+        case 'rect': prims.push({k:'rect',x:num('x'),y:num('y'),w:num('width'),h:num('height'),fill:hasFill,stroke:hasStroke}); break;
+        case 'line': prims.push({k:'line',x1:num('x1'),y1:num('y1'),x2:num('x2'),y2:num('y2')}); break;
+        case 'path': {
+          const subs=parsePathSegs(at('d')||'');
+          if(hasFill) for(const sub of subs){ const pts=flattenSub(sub); if(pts.length>=3) prims.push({k:'pathFill',pts}); }
+          if(hasStroke||!hasFill) for(const sub of subs) prims.push({k:'pathStroke',segs:sub.segs,knock:strokeA==='#12151a'});
+          break; }
+        case 'text': prims.push({k:'text',x:num('x'),y:num('y'),h:parseFloat(at('font-size')||'8'),text:e.textContent||'',knock:fillA==='#12151a'}); break;
+      }
+    }
+  })(doc.documentElement);
+  _irCache[id]=prims;
+  return prims;
+}
+
+// --- 配置＋配線 → CADエンティティ（実寸mm、Y上向き） ---
+function buildCadEntities(){
+  const mm=(mmPerPx!=null)?mmPerPx:1;
+  const ents=[]; const min={x:Infinity,y:Infinity}, max={x:-Infinity,y:-Infinity};
+  const bump=(X,Y)=>{ if(X<min.x)min.x=X; if(X>max.x)max.x=X; if(Y<min.y)min.y=Y; if(Y>max.y)max.y=Y; };
+  const push=(e,lname,lidx,color)=>{ e.lname=lname; e.lidx=lidx; e.color=color; ents.push(e); };
+  const addLine=(x1,y1,x2,y2,L,li,c)=>{ push({t:'line',x1,y1,x2,y2},L,li,c); bump(x1,y1); bump(x2,y2); };
+  const addCircle=(cx,cy,r,L,li,c)=>{ push({t:'circle',cx,cy,r},L,li,c); bump(cx-r,cy-r); bump(cx+r,cy+r); };
+  const addArc=(cx,cy,r,a0,da,L,li,c)=>{ push({t:'arc',cx,cy,r,a0,da},L,li,c);
+    for(let k=0;k<=4;k++){ const a=a0+da*k/4; bump(cx+r*Math.cos(a),cy+r*Math.sin(a)); } };
+  const addTri=(x1,y1,x2,y2,x3,y3,L,li,c)=>{ push({t:'tri',x1,y1,x2,y2,x3,y3},L,li,c); bump(x1,y1); bump(x2,y2); bump(x3,y3); };
+  const fanFill=(pts,L,li,c)=>{ for(let i=1;i<pts.length-1;i++) addTri(pts[0][0],pts[0][1],pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],L,li,c); };
+
+  for(const p of placed){
+    const s=symById(p.type); if(!s) continue;
+    const [lname,lidx]=CAD_CAT_LAYER[s.cat]||['ETC',7];
+    const col=7;
+    const rot=(p.rot||0)*Math.PI/180, cs=Math.cos(rot), sn=Math.sin(rot);
+    const X=(u,v)=>{ const lx=u-20, ly=v-20;
+      return [ (p.x+lx*cs-ly*sn)*mm, -(p.y+lx*sn+ly*cs)*mm ]; };   // Y反転=鏡映1回
+    const prims=symbolIR(p.type);
+    // 「抜き」傍記(画面では背景色#12151aで白抜きに見える)を持つ記号は、
+    // 単色CADで傍記が塗りに埋もれないよう塗りを省略し輪郭＋傍記で表現する
+    const hasKnock=prims.some(q=>q.knock);
+    for(const pr of prims){
+      if(pr.k==='line'){ const [x1,y1]=X(pr.x1,pr.y1), [x2,y2]=X(pr.x2,pr.y2); addLine(x1,y1,x2,y2,lname,lidx,col); }
+      else if(pr.k==='circle'){
+        const [cx,cy]=X(pr.cx,pr.cy), r=pr.r*mm;
+        if(pr.fill&&!hasKnock){ const pts=[]; for(let k=0;k<CAD_FILL_SEGS;k++){ const a=2*Math.PI*k/CAD_FILL_SEGS; pts.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]); } fanFill(pts,lname,lidx,col); }
+        addCircle(cx,cy,r,lname,lidx,col);
+      }
+      else if(pr.k==='rect'){
+        const c4=[X(pr.x,pr.y),X(pr.x+pr.w,pr.y),X(pr.x+pr.w,pr.y+pr.h),X(pr.x,pr.y+pr.h)];
+        if(pr.fill) fanFill(c4,lname,lidx,col);
+        if(pr.stroke||!pr.fill) for(let i=0;i<4;i++){ const a=c4[i], b=c4[(i+1)%4]; addLine(a[0],a[1],b[0],b[1],lname,lidx,col); }
+      }
+      else if(pr.k==='pathStroke'){
+        for(const sg of pr.segs){
+          const [x1,y1]=X(sg.x1,sg.y1), [x2,y2]=X(sg.x2,sg.y2);
+          if(sg.k==='L'){ addLine(x1,y1,x2,y2,lname,lidx,col); continue; }
+          const c=arcToCenter(x1,y1,x2,y2,sg.r*mm,sg.laf,!sg.fs);   // 鏡映1回→sweep反転
+          if(!c){ addLine(x1,y1,x2,y2,lname,lidx,col); continue; }
+          const a0=(c.da<0)?(c.a1+c.da):c.a1, da=Math.abs(c.da);    // CCW正に正規化
+          addArc(c.cx,c.cy,c.r,a0,da,lname,lidx,col);
+        }
+      }
+      else if(pr.k==='pathFill'){ fanFill(pr.pts.map(q=>X(q[0],q[1])),lname,lidx,col); }
+      else if(pr.k==='text'){
+        const w=pr.h*CAD_TEXT_ASPECT*[...pr.text].length;
+        const [x1,y1]=X(pr.x-w/2,pr.y), [x2,y2]=X(pr.x+w/2,pr.y);
+        const h=pr.h*mm;
+        let ang=-(p.rot||0)%360; if(ang<0)ang+=360;
+        push({t:'text',x1,y1,x2,y2,h,text:pr.text,ang},lname,lidx,col);
+        { // 文字枠の4隅（ベースラインの90°CCW方向=グリフ上方向。rot=0で従来と同値）
+          const dx=x2-x1, dy=y2-y1, L=Math.hypot(dx,dy)||1, ux=-dy/L*h, uy=dx/L*h;
+          bump(x1,y1); bump(x2,y2); bump(x1+ux,y1+uy); bump(x2+ux,y2+uy);
+        }
+      }
+    }
+  }
+  for(const w of wires){
+    const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+    if(!a||!b) continue;
+    const c=w.circuit?((w.circuit-1)%8)+1:7;
+    addLine(a.x*mm,-a.y*mm,b.x*mm,-b.y*mm,CAD_WIRE_LAYER[0],CAD_WIRE_LAYER[1],c);
+  }
+  return {ents,min,max,mm};
+}
+
+// --- DXF出力（Shift-JISテキスト。既存DxfWriter流用、EXTMINを原点へシフト） ---
+function dxfBytesFromEnts(ents,min,max){
+  const w=new window.JwwToDxf.DxfWriter();
+  const used=new Set(ents.map(e=>e.lname));
+  ['LIGHT','OUTLET','SWITCH','PANEL','ALARM','BOX','WIRE','ETC'].forEach(n=>{ if(used.has(n)) w.addLayer(n,7); });
+  const sx=-min.x, sy=-min.y;
+  w.writeHeader([0,0],[max.x-min.x,max.y-min.y]);
+  w.writeTables(); w.writeBlocks();
+  w.pair(0,'SECTION'); w.pair(2,'ENTITIES');
+  for(const e of ents){
+    if(e.t==='line') w.line(e.x1+sx,e.y1+sy,e.x2+sx,e.y2+sy,e.lname,e.color);
+    else if(e.t==='circle') w.circle(e.cx+sx,e.cy+sy,e.r,e.lname,e.color);
+    else if(e.t==='arc') w.arc(e.cx+sx,e.cy+sy,e.r,e.a0*180/Math.PI,(e.a0+e.da)*180/Math.PI,e.lname,e.color);
+    else if(e.t==='tri') w.solid([e.x1+sx,e.y1+sy],[e.x2+sx,e.y2+sy],[e.x3+sx,e.y3+sy],[e.x3+sx,e.y3+sy],e.lname,e.color);
+    else if(e.t==='text') w.text(e.x1+sx,e.y1+sy,e.h,e.text,e.ang,e.lname,e.color,CAD_TEXT_ASPECT);
+  }
+  w.pair(0,'ENDSEC'); w.pair(0,'EOF');
+  return window.JwwToDxf.toSjisBytes(w.getText());
+}
+
+// --- JWW出力（紙面mm=実寸/縮尺、原点=図面中心。縮尺は自動選定・A3基準） ---
+const ACI_TO_JWW_PEN={1:1,2:6,3:2,4:4,5:3,6:5,7:7,8:8};   // jww_to_dxf.jsの_JWW_TO_DXF_COLOR_JSの逆写像（往復で色一致）
+async function jwwBytesFromEnts(ents,min,max){
+  const W=window.JwwWriter;
+  const scaleDenom=window.DxfToJww.autoScale({x:min.x,y:min.y},{x:max.x,y:max.y},390,270); // A3から余白1割
+  const ox=(min.x+max.x)/2, oy=(min.y+max.y)/2;
+  const fx=v=>(v-ox)/scaleDenom, fy=v=>(v-oy)/scaleDenom, fr=v=>v/scaleDenom;
+  const setB=(o,e)=>{ o.glayer=0; o.layer=e.lidx; o.penColor=ACI_TO_JWW_PEN[e.color]||7; return o; };
+  const list=[];
+  for(const e of ents){
+    if(e.t==='line') list.push(setB(new W.CDataSen(fx(e.x1),fy(e.y1),fx(e.x2),fy(e.y2)),e));
+    else if(e.t==='circle') list.push(setB(new W.CDataEnko(fx(e.cx),fy(e.cy),fr(e.r),0,2*Math.PI),e));
+    else if(e.t==='arc') list.push(setB(new W.CDataEnko(fx(e.cx),fy(e.cy),fr(e.r),e.a0,e.da),e));
+    else if(e.t==='tri') list.push(setB(new W.CDataSolid(fx(e.x1),fy(e.y1),fx(e.x2),fy(e.y2),fx(e.x3),fy(e.y3)),e));
+    else if(e.t==='text'){
+      const sy2=fr(e.h), sx2=sy2*CAD_TEXT_ASPECT;
+      list.push(setB(new W.CDataMoji(fx(e.x1),fy(e.y1),fx(e.x2),fy(e.y2),e.text,
+        {size_x:sx2,size_y:sy2,kakudo:e.ang,font:'ＭＳ ゴシック'}),e));
+    }
+  }
+  const res=await fetch('lib/dxf_jww/header_template.bin');
+  if(!res.ok) throw new Error('header template fetch failed');
+  const header=new Uint8Array(await res.arrayBuffer());
+  const bytes=await W.buildJww(header,list,scaleDenom,3);    // 図面サイズ3=A3
+  return {bytes,scaleDenom,count:list.length};
+}
+
+// --- 印刷用SVG合成（下敷き＋配線＋シンボル。選択枠等の編集用要素は含めない） ---
+function printInk(c){  // 白背景で見えない明色（盤・機器の#EDEBE4等）は暗色に落とす
+  const m=/^#([0-9a-f]{6})$/i.exec(c||''); if(!m) return c;
+  const v=parseInt(m[1],16), r=(v>>16)&255, g=(v>>8)&255, b=v&255;
+  return (0.299*r+0.587*g+0.114*b)>200 ? '#222' : c;
+}
+function printRect(){  // 用紙範囲∪配置範囲（回転40×40シンボルの外接≒28px余裕）
+  let x0=0, y0=0, x1=baseW, y1=baseH;
+  const M=28;
+  placed.forEach(p=>{ x0=Math.min(x0,p.x-M); x1=Math.max(x1,p.x+M); y0=Math.min(y0,p.y-M); y1=Math.max(y1,p.y+M); });
+  return {vx:Math.floor(x0), vy:Math.floor(y0), vw:Math.ceil(x1-x0), vh:Math.ceil(y1-y0)};
+}
+function printScale(vw,vh){  // canvas面積上限（iOS Safari≒16.7MP）から逆算して2倍を上限にクランプ
+  const MAX_AREA=16000000;
+  return Math.min(2, Math.sqrt(MAX_AREA/Math.max(1,vw*vh)));
+}
+function buildPrintSVG(){
+  const rc=printRect();
+  const img=baseSrc?`<image href="${baseSrc}" x="0" y="0" width="${baseW}" height="${baseH}"/>`:'';
+  const wl=wires.map(w=>{
+    const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+    if(!a||!b) return '';
+    return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${printInk(circuitColor(w.circuit))}" stroke-width="2"/>`;
+  }).join('');
+  const uses=placed.map(p=>{
+    const s=symById(p.type); if(!s) return '';
+    return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(s.color)}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
+  }).join('');
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rc.vx} ${rc.vy} ${rc.vw} ${rc.vh}" width="${rc.vw}" height="${rc.vh}">`
+    +`<rect x="${rc.vx}" y="${rc.vy}" width="${rc.vw}" height="${rc.vh}" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}</svg>`;
+  return {svg, ...rc};
+}
+
+function exportGuard(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return false; }
+  if(!placed.length&&!wires.length){ toast('書き出す配置がありません'); return false; }
+  return true;
+}
+async function exportDXF(){
+  if(!exportGuard()) return;
+  try{
+    await window.JwwWriter.ensureSjisMap();
+    if(mmPerPx==null) toast('縮尺未設定のため 1px=1mm とみなして出力します');
+    const {ents,min,max}=buildCadEntities();
+    if(!ents.length){ toast('書き出す図形がありません'); return; }
+    const bytes=dxfBytesFromEnts(ents,min,max);
+    dl(new Blob([bytes],{type:'application/dxf'}),'kansei_'+ts()+'.dxf');
+    toast(`DXFを書き出しました（${ents.length}要素）`);
+  }catch(err){ console.error(err); toast('DXF書き出しに失敗しました'); }
+}
+async function exportJWW(){
+  if(!exportGuard()) return;
+  try{
+    await window.JwwWriter.ensureSjisMap();
+    if(mmPerPx==null) toast('縮尺未設定のため 1px=1mm とみなして出力します');
+    const {ents,min,max}=buildCadEntities();
+    if(!ents.length){ toast('書き出す図形がありません'); return; }
+    const r=await jwwBytesFromEnts(ents,min,max);
+    dl(new Blob([r.bytes],{type:'application/octet-stream'}),'kansei_'+ts()+'.jww');
+    toast(`JWWを書き出しました（1/${r.scaleDenom}・${r.count}要素）`);
+  }catch(err){ console.error(err); toast('JWW書き出しに失敗しました（http配信でお試しください）'); }
+}
+function exportPrint(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開いてください'); return; }
+  if(!placed.length&&!baseSrc){ toast('印刷する内容がありません'); return; }
+  const {svg,vw,vh}=buildPrintSVG();
+  const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+  const img=new Image();
+  img.onload=()=>{
+    const sc=printScale(vw,vh);
+    const cv=document.createElement('canvas'); cv.width=Math.round(vw*sc); cv.height=Math.round(vh*sc);
+    const ctx=cv.getContext('2d'); ctx.scale(sc,sc); ctx.drawImage(img,0,0,vw,vh);
+    URL.revokeObjectURL(url);
+    const durl=cv.toDataURL('image/png');
+    if(!durl||durl.length<100){ toast('印刷用画像の生成に失敗しました（図面が大きすぎます）'); return; }
+    const win=window.open('','_blank');
+    if(!win){ toast('ポップアップがブロックされました'); return; }
+    win.document.write('<!doctype html><html><head><title>印刷（ブラウザの印刷でPDF保存できます）</title>'
+      +'<style>@page{margin:8mm}body{margin:0}img{width:100%}</style></head><body>'
+      +'<img src="'+durl+'" onload="setTimeout(function(){window.print()},250)"></body></html>');
+    win.document.close();
+  };
+  img.onerror=()=>{ URL.revokeObjectURL(url); toast('印刷用画像の生成に失敗しました'); };
+  img.src=url;
+}
+
+// メニューUI
+el('btn-export').onclick=ev=>{ ev.stopPropagation(); el('expmenu').classList.toggle('show'); };
+// キャプチャ段で監視（配灯パネル等のstopPropagationはバブル段のみ止めるため確実に閉じる）
+document.addEventListener('pointerdown',ev=>{ if(!ev.target.closest('#expwrap')) el('expmenu').classList.remove('show'); },true);
+el('exp-dxf').onclick=()=>{ el('expmenu').classList.remove('show'); exportDXF(); };
+el('exp-jww').onclick=()=>{ el('expmenu').classList.remove('show'); exportJWW(); };
+el('exp-print').onclick=()=>{ el('expmenu').classList.remove('show'); exportPrint(); };
+
 // ============ 集計 ============
 function renderTally(){
   document.getElementById('tot').textContent=placed.length;
@@ -550,19 +1770,23 @@ function renderTally(){
 
 // ============ 保存/読込/出力 ============
 function saveJSON(){
-  const st={ver:'alpha-mvp-1', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed};
+  const st={ver:'alpha-mvp-4', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate};
   const blob=new Blob([JSON.stringify(st)],{type:'application/json'});
   dl(blob,'haichi_'+ts()+'.json'); toast('保存しました');
 }
 function loadState(file){
+  if(wireMode) endWireMode();
   const r=new FileReader();
   r.onload=()=>{ try{
     const st=JSON.parse(r.result);
     placed=st.placed||[]; uidSeq=st.uidSeq||(placed.length+1); mmPerPx=st.mmPerPx||null;
+    rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
+    wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
+    estimate=st.estimate||defaultEstimate();
     if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); } else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); }
     document.getElementById('uploader').style.display='none';
     document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
-    selUid=null; renderSyms(); renderSel(); renderTally(); fitView(); toast('読み込みました');
+    selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); fitView(); toast('読み込みました');
   }catch(e){ toast('ファイルを読めませんでした'); } };
   r.readAsText(file);
 }
@@ -570,6 +1794,18 @@ function exportCSV(){
   const counts={}; placed.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
   let rows=[['分類','名称','数量','単位']];
   SYMBOLS.filter(s=>counts[s.id]).forEach(s=>rows.push([s.cat,s.nm,counts[s.id],'個']));
+  if(wires.length){
+    const cal=mmPerPx!=null, unit=cal?'m':'px';
+    rows.push(['','','','']);
+    rows.push(['配線','回路','配線長',unit]);
+    const byC={}; wires.forEach(w=>{ byC[w.circuit]=(byC[w.circuit]||0)+wireLenPx(w); });
+    let total=0;
+    Object.keys(byC).map(Number).sort((a,b)=>a-b).forEach(c=>{
+      const len=byC[c]; total+=len;
+      rows.push(['配線', c?('回路'+c):'手動', cal?(len*mmPerPx/1000).toFixed(2):Math.round(len), unit]);
+    });
+    rows.push(['配線','合計', cal?(total*mmPerPx/1000).toFixed(2):Math.round(total), unit]);
+  }
   const csv='\uFEFF'+rows.map(r=>r.join(',')).join('\r\n');
   dl(new Blob([csv],{type:'text/csv'}),'hiroi_'+ts()+'.csv'); toast('集計CSVを書き出しました');
 }
@@ -585,7 +1821,7 @@ document.getElementById('btn-open').onclick=()=>document.getElementById('file-ba
 document.getElementById('btn-save').onclick=saveJSON;
 document.getElementById('btn-load').onclick=()=>document.getElementById('file-load').click();
 document.getElementById('btn-csv').onclick=exportCSV;
-document.getElementById('btn-clear').onclick=()=>{ if(placed.length&&!confirm('配置をすべて消去しますか？'))return; placed=[]; selUid=null; renderSyms(); renderSel(); renderTally(); };
+document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length)&&!confirm('配置・配線をすべて消去しますか？'))return; placed=[]; rooms=[]; wires=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); };
 document.getElementById('file-base').addEventListener('change',e=>{ if(e.target.files[0])loadFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('file-load').addEventListener('change',e=>{ if(e.target.files[0])loadState(e.target.files[0]); e.target.value=''; });
 document.getElementById('btn-sample').onclick=()=>{ document.getElementById('uploader').style.display='none'; setBaseSize(1600,1100); clearBase(); fitView(); };
