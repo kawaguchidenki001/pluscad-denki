@@ -169,6 +169,42 @@
   #wireinfo:empty{display:none}
   #wireinfo .witit{font-size:11.5px;color:var(--txt-dim);margin-bottom:7px;line-height:1.5}
   #wireinfo .witit b{color:#fff}
+
+  /* ---- 見積（Step D） ---- */
+  #modal-estimate{position:fixed;inset:0;z-index:60;background:var(--panel);display:none;flex-direction:column;color:var(--txt)}
+  #modal-estimate.show{display:flex}
+  #modal-estimate .ehead{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--panel-line)}
+  #modal-estimate .ehead h3{margin:0;font-size:15px}
+  .echip{font-size:11px;font-family:var(--mono);padding:4px 9px;border-radius:6px;border:1px solid var(--panel-line);background:var(--panel2);color:var(--txt-dim)}
+  .echip.ok{color:#fff;border-color:var(--confirmed)}
+  .echip.err{color:#fff;background:var(--redline);border-color:var(--redline)}
+  #modal-estimate .espacer{flex:1}
+  #modal-estimate .ehead button,#efoot button{background:var(--panel2);color:var(--txt);border:1px solid var(--panel-line);border-radius:7px;padding:8px 13px;font-size:12px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #modal-estimate .ehead button:hover,#efoot button:hover{background:var(--panel3)}
+  #efoot button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
+  #ehead-inputs{flex:none;display:flex;gap:12px;flex-wrap:wrap;padding:8px 16px;border-bottom:1px solid var(--panel-line)}
+  #ehead-inputs label{font-size:10px;color:var(--txt-dim);display:flex;flex-direction:column;gap:3px}
+  #ehead-inputs input{background:var(--panel);border:1px solid var(--panel-line);border-radius:6px;color:#fff;padding:5px 8px;font-size:12px;font-family:var(--jp);min-width:130px}
+  #eopts{flex:none;display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:8px 16px;border-bottom:1px solid var(--panel-line);font-size:11px;color:var(--txt-dim)}
+  #eopts label{display:flex;align-items:center;gap:5px}
+  #eopts input[type=number]{width:60px;background:var(--panel);border:1px solid var(--panel-line);border-radius:6px;color:#fff;padding:4px 6px;font-size:12px;font-family:var(--mono);text-align:right}
+  #ebody{flex:1;overflow:auto}
+  table.est{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
+  table.est th{position:sticky;top:0;background:var(--panel2);color:var(--txt-dim);font-weight:700;font-size:11px;padding:7px 8px;text-align:left;border-bottom:1px solid var(--panel-line);z-index:1}
+  table.est th.n,table.est td.n{text-align:right}
+  table.est td{padding:5px 8px;border-bottom:1px solid var(--panel-line);vertical-align:middle}
+  table.est td.n{font-family:var(--mono);color:#fff}
+  table.est tr:hover td{background:var(--panel2)}
+  table.est select{max-width:240px;background:var(--panel);border:1px solid var(--panel-line);color:var(--txt);border-radius:5px;padding:4px 6px;font-size:11.5px;font-family:var(--jp)}
+  table.est input.qty{width:74px;background:var(--panel);border:1px solid var(--panel-line);color:#fff;border-radius:5px;padding:4px 6px;font-size:12px;font-family:var(--mono);text-align:right}
+  .cdot{display:inline-block;width:9px;height:9px;border-radius:50%}
+  .cdot.g{background:var(--confirmed)} .cdot.y{background:var(--amber)} .cdot.r{background:var(--redline)}
+  #etot{flex:none;border-top:1px solid var(--panel-line);padding:11px 16px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;background:var(--panel2)}
+  #etot .tt{font-size:11px;color:var(--txt-dim)}
+  #etot .tt b{color:#fff;font-family:var(--mono);font-size:14px;margin-left:5px}
+  #etot .grand b{color:#fff;font-size:20px}
+  #enote{flex:none;font-size:10.5px;color:var(--txt-dim);padding:7px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
+  #efoot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -181,6 +217,7 @@
     <button id="btn-layout">自動配灯</button>
     <button id="btn-autowire">自動配線</button>
     <button id="btn-wire">配線編集</button>
+    <button id="btn-estimate">見積</button>
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
     <span class="spacer"></span>
     <button id="btn-save">保存</button>
@@ -299,6 +336,40 @@
         <button id="calib-cancel">キャンセル</button>
         <button id="calib-ok" class="acc">確定</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 見積モーダル（Step D） -->
+  <div id="modal-estimate">
+    <div class="ehead">
+      <h3>見積（自動拾い→岐阜県単価連携）</h3>
+      <span class="echip" id="emaster">単価マスタ未読込</span>
+      <input type="file" id="file-unit" accept=".json,application/json" style="display:none">
+      <button id="e-loadmaster" style="display:none">unit_prices.json を選択</button>
+      <span class="espacer"></span>
+      <button id="e-close">閉じる</button>
+    </div>
+    <div id="ehead-inputs">
+      <label>工事名<input id="eh-name" type="text" placeholder="○○邸 電気工事"></label>
+      <label>宛先<input id="eh-to" type="text" placeholder="○○様"></label>
+      <label>見積番号<input id="eh-no" type="text" placeholder="No."></label>
+      <label>見積日<input id="eh-date" type="text" placeholder="YYYY/MM/DD"></label>
+    </div>
+    <div id="eopts">
+      <label>現場管理費 <input id="eo-site" type="number" min="0" step="1" value="0">%</label>
+      <label>一般管理費 <input id="eo-admin" type="number" min="0" step="1" value="0">%</label>
+      <label>値引 ¥<input id="eo-disc" type="number" min="0" step="1000" value="0"></label>
+      <label>消費税 <input id="eo-tax" type="number" min="0" step="1" value="10">%</label>
+      <label>配線余長 <input id="eo-slack" type="number" min="0" step="5" value="10">%</label>
+      <label><input id="eo-round" type="checkbox" checked>円未満切捨</label>
+      <label><input id="eo-break" type="checkbox">材工内訳</label>
+      <label><input id="eo-conduit" type="checkbox">電線管を含める</label>
+    </div>
+    <div id="ebody"></div>
+    <div id="etot"></div>
+    <div id="enote">※単価＝複合単価(材料＋労務＋直接経費)。丸めにより内訳計と金額は一致しないことがあります。／現場管理費・一般管理費は工事全体割増で、複合単価内の経費とは二重計上ではありません（既定0%＝実勢率が決まるまで加算しません）。／配線は縮尺較正済みの場合のみ計上します。品目・規格は自動割当のたたき台です（黄＝自動／緑＝確定済／赤＝未マッチ）。必ず内容をご確認ください。</div>
+    <div id="efoot">
+      <button id="e-csv" class="acc">見積CSV（Excel）</button>
     </div>
   </div>
 
@@ -448,6 +519,17 @@ let wireMode = false;     // 配線編集モード
 let wirePendA = null;     // 結線の1点目 uid
 const CIRC_COLORS = ['#E2452B','#3F72C4','#1F9A60','#D99A24','#8B5CF6','#26C6DA','#EC4899','#84CC16','#F97316','#14B8A6'];
 function circuitColor(n){ return n ? CIRC_COLORS[(n-1)%CIRC_COLORS.length] : '#9AA0AA'; }
+// 見積（Step D）
+let MASTER=null;          // 単価マスタ配列（ランタイムのみ・保存しない）
+let MASTER_IDX=null;      // {byCat:Map, byName:Map, cats:[]}
+let masterLoading=null;   // fetch多重防止
+function defaultEstimate(){
+  return { head:{name:'',to:'',no:'',date:''},
+    opts:{siteRate:0, adminRate:0, discount:0, taxRate:10, roundDown:true, showBreak:false},
+    lines:{},   // [記号id]: {cat,name,spec,work,qty,off,user}（ユーザー上書きのみ保持）
+    wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}} };
+}
+let estimate = defaultEstimate();
 
 const stage=document.getElementById('stage');
 const world=document.getElementById('world');
@@ -1026,6 +1108,294 @@ function handleWireSymTap(uid){
 }
 function deleteWire(uid){ wires=wires.filter(w=>w.uid!==uid); renderWires(); renderWireInfo(); }
 
+// ============ 見積（配置数＋配線長 → 品目マッピング → 岐阜県単価マスタ照合 / Step D） ============
+// 記号id → マスタ検索(cats/keyword)。specは候補から選択。
+const SYMMAP={
+  light:{cats:['照明器具'],kw:['LED','直付','ベースライト'],unit:'個'},
+  base_lt:{cats:['照明器具'],kw:['LED','直付','ベースライト'],unit:'個'},
+  fujikasa:{cats:['照明器具'],kw:['LED','直付','ベースライト'],unit:'個'},
+  down:{cats:['照明器具'],kw:['ダウンライト'],unit:'個'},
+  ceiling:{cats:['照明器具'],kw:['直付天井灯'],unit:'個'},
+  pendant:{cats:['照明器具'],kw:['ペンダント'],unit:'個'},
+  chande:{cats:['照明器具'],kw:['シャンデリヤ'],unit:'個'},
+  bracket:{cats:['照明器具'],kw:['ブラケット'],unit:'個'},
+  exit:{cats:['照明器具'],kw:['誘導灯'],unit:'個'},
+  emg_inc:{cats:['照明器具'],kw:['非常用'],unit:'個'},
+  emg_fl:{cats:['照明器具'],kw:['非常用'],unit:'個'},
+  outlet:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],unit:'個'},
+  outlet2p:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],unit:'個'},
+  outletE:{cats:['スイッチ・コンセント'],kw:['コンセント','接地極'],unit:'個'},
+  outletET:{cats:['スイッチ・コンセント'],kw:['コンセント','接地端子'],unit:'個'},
+  outletLK:{cats:['スイッチ・コンセント'],kw:['コンセント','抜'],unit:'個'},
+  outletW:{cats:['スイッチ・コンセント'],kw:['防水コンセント'],unit:'個'},
+  outlet2P:{cats:['スイッチ・コンセント'],kw:['コンセント','200'],unit:'個'},
+  outlet3P:{cats:['スイッチ・コンセント'],kw:['コンセント','3P'],unit:'個'},
+  outletF:{cats:['スイッチ・コンセント'],kw:['アップコンセント'],unit:'個'},
+  sw:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ'],unit:'個'},
+  sw3:{cats:['スイッチ・コンセント'],kw:['スイッチ','3路'],unit:'個'},
+  sw4:{cats:['スイッチ・コンセント'],kw:['スイッチ','4路'],unit:'個'},
+  swP:{cats:['スイッチ・コンセント'],kw:['スイッチ','位置'],unit:'個'},
+  swL:{cats:['スイッチ・コンセント'],kw:['スイッチ','確認'],unit:'個'},
+  swDim:{cats:['スイッチ・コンセント'],kw:['調光'],unit:'個'},
+  swW:{cats:['スイッチ・コンセント'],kw:['防水形スイッチ'],unit:'個'},
+  swAuto:{cats:['スイッチ・コンセント'],kw:['自動点滅'],unit:'個'},
+  panelD:{cats:['分電盤・開閉器'],kw:['分電盤'],unit:'面'},
+  panelH:{cats:['分電盤・開閉器'],kw:['配電盤'],unit:'面'},
+  panelC:{cats:['分電盤・開閉器','受変電設備'],kw:['制御盤'],unit:'面'},
+  motor:{cats:['住宅・換気・空調設備','取付け費'],kw:['電動機'],unit:'台'},
+  fan:{cats:['住宅・換気・空調設備'],kw:['換気扇'],unit:'台'},
+  lan:{cats:['スイッチ・コンセント','弱電機器（インターホン・TV等）'],kw:['情報用モジュラージャック'],unit:'個'},
+  tv:{cats:['弱電機器（インターホン・TV等）'],kw:['テレビ端子'],unit:'個'},
+  tel:{cats:['スイッチ・コンセント'],kw:['電話用モジュラージャック'],unit:'個'},
+  smoke:{cats:['火災報知・ガス漏れ'],kw:['煙感知器'],unit:'個'},
+  heat:{cats:['火災報知・ガス漏れ'],kw:['スポット感知器'],unit:'個'},
+  callP:{cats:['火災報知・ガス漏れ'],kw:['発信機'],unit:'個'},
+  ind:{cats:['火災報知・ガス漏れ'],kw:['表示灯'],unit:'個'},
+  bell:{cats:['火災報知・ガス漏れ'],kw:['警報ベル'],unit:'個'},
+  jb:{cats:['スイッチ・コンセント','ボックス・貫通処理'],kw:['ジョイントボックス'],unit:'個'},
+  ob:{cats:['ボックス・貫通処理'],kw:['アウトレットボックス'],unit:'個'},
+  pb:{cats:['ボックス・貫通処理'],kw:['プルボックス'],unit:'個'},
+  riser:null,   // 立上り＝配線付随。品目化しない
+};
+const CABLE_CAT='ケーブル（強電）', CABLE_NAME='ケーブル', CONDUIT_CAT='電線管・ダクト・線ぴ';
+const WIRE_DEF={ lighting:{label:'配線 照明系',spec:'VVF 1.6mm -2C'}, outlet:{label:'配線 コンセント系',spec:'VVF 2.0mm -2C'}, feeder:{label:'配線 電源送り',spec:'VVF 2.0mm -2C'} };
+
+const SEP=String.fromCharCode(1);   // byNameキー・仕様値の区切り（データに現れない制御文字）
+function normStr(s){ return String(s==null?'':s).normalize('NFKC').toLowerCase().replace(/[\s　・（）()･]/g,''); }
+function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return escHtml(s).replace(/"/g,'&quot;'); }
+function yen(n){ return Math.round(n||0).toLocaleString('ja-JP'); }
+function rnd(v){ return estimate.opts.roundDown ? Math.floor(v||0) : Math.round(v||0); }
+
+async function loadMaster(){
+  if(MASTER) return MASTER;
+  if(masterLoading) return masterLoading;
+  masterLoading=(async()=>{
+    for(const url of ['./unit_prices.json','https://kawaguchidenki001.github.io/tanka-search/unit_prices.json']){
+      try{ const res=await fetch(url); if(res.ok){ const j=await res.json(); if(Array.isArray(j)&&j.length){ setMaster(j); return MASTER; } } }catch(e){}
+    }
+    masterLoading=null; throw new Error('master fetch failed');
+  })();
+  return masterLoading;
+}
+function setMaster(arr){ MASTER=arr; buildMasterIndex(); }
+function buildMasterIndex(){
+  const byCat=new Map(), byName=new Map();
+  MASTER.forEach(r=>{
+    r._n=normStr(r.name+' '+r.spec+' '+(r.note||''));
+    if(!byCat.has(r.category)) byCat.set(r.category,[]);
+    byCat.get(r.category).push(r);
+    const key=r.category+SEP+r.name;
+    if(!byName.has(key)) byName.set(key,[]);
+    byName.get(key).push(r);
+  });
+  MASTER_IDX={byCat, byName, cats:[...byCat.keys()].sort()};
+}
+function medianRec(cat,name){ const g=MASTER_IDX.byName.get(cat+SEP+name); if(!g||!g.length)return null; const a=g.slice().sort((x,y)=>x.composite_price-y.composite_price); return a[Math.floor(a.length/2)]; }
+function findRec(sel){
+  if(!sel||!MASTER_IDX) return null;
+  const g=MASTER_IDX.byName.get(sel.cat+SEP+sel.name); if(!g) return null;
+  return g.find(r=>r.spec===sel.spec && (sel.work==null||r.work===sel.work)) || g.find(r=>r.spec===sel.spec) || g[0];
+}
+function candidatesFor(id){
+  const m=SYMMAP[id]; if(!m||!MASTER_IDX) return [];
+  const kws=m.kw.map(normStr);
+  let pool=[]; m.cats.forEach(c=>{ const a=MASTER_IDX.byCat.get(c); if(a) pool=pool.concat(a); });
+  return pool.map(r=>{ let s=0; kws.forEach(k=>{ if(r._n.includes(k)) s+=5; }); if(m.unit&&r.unit!==m.unit) s-=3; if(r.category.includes('再使用')) s-=6; return {r,s}; })
+    .filter(x=>x.s>0).sort((a,b)=>b.s-a.s).map(x=>x.r);
+}
+function defaultSel(id){
+  const c=candidatesFor(id); if(!c.length) return null;
+  const cat=c[0].category, name=c[0].name; const rec=medianRec(cat,name)||c[0];
+  return {cat,name,spec:rec.spec,work:rec.work};
+}
+function defaultCableSel(specHint){
+  const g=MASTER_IDX&&MASTER_IDX.byName.get(CABLE_CAT+SEP+CABLE_NAME); if(!g) return null;
+  const hn=normStr(specHint); const m=g.filter(r=>normStr(r.spec).includes(hn));
+  const a=(m.length?m:g).slice().sort((x,y)=>x.composite_price-y.composite_price); const rec=a[Math.floor(a.length/2)];
+  return {cat:CABLE_CAT,name:CABLE_NAME,spec:rec.spec,work:rec.work};
+}
+function defaultConduitSel(){
+  if(!MASTER_IDX) return null;
+  for(const nm of ['合成樹脂製可とう電線管','電線管']){
+    const g=MASTER_IDX.byName.get(CONDUIT_CAT+SEP+nm);
+    if(g&&g.length){ const a=g.slice().sort((x,y)=>x.composite_price-y.composite_price); const rec=a[Math.floor(a.length/2)]; return {cat:CONDUIT_CAT,name:nm,spec:rec.spec,work:rec.work}; }
+  }
+  return null;
+}
+function wireGroup(w){
+  if(w.kind==='power') return 'feeder';
+  const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+  if((a&&catOf(a)==='コンセント')||(b&&catOf(b)==='コンセント')) return 'outlet';
+  return 'lighting';
+}
+function storeFor(id){
+  if(id.startsWith('wire:')){ const g=id.slice(5); return estimate.wire.groups[g]||(estimate.wire.groups[g]={}); }
+  if(id.startsWith('conduit:')) return estimate.wire.conduit||(estimate.wire.conduit={});
+  const t=id.slice(4); return estimate.lines[t]||(estimate.lines[t]={});
+}
+function buildRows(){
+  const rows=[]; if(!MASTER_IDX) return rows;
+  const counts={}; placed.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
+  Object.keys(counts).forEach(type=>{
+    if(!SYMMAP[type]) return; const s=symById(type); if(!s) return;
+    const ln=estimate.lines[type]||{};
+    const sel=(ln.user&&ln.name)?{cat:ln.cat,name:ln.name,spec:ln.spec,work:ln.work}:defaultSel(type);
+    const rec=sel?findRec(sel):null;
+    const autoQty=counts[type]; const qty=(ln.qty!=null)?ln.qty:autoQty;
+    rows.push({id:'sym:'+type,kind:'device',label:s.nm,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:(SYMMAP[type].unit||''),autoQty,qty,off:!!ln.off,user:!!ln.user});
+  });
+  const glen={lighting:0,outlet:0,feeder:0};
+  wires.forEach(w=>{ glen[wireGroup(w)]+=wireLenPx(w); });
+  ['lighting','outlet','feeder'].forEach(g=>{
+    if(glen[g]<=0) return;
+    const wl=estimate.wire.groups[g]||{};
+    const sel=(wl.user&&wl.name)?{cat:wl.cat,name:wl.name,spec:wl.spec,work:wl.work}:defaultCableSel(WIRE_DEF[g].spec);
+    const rec=sel?findRec(sel):null;
+    let qtyM=null;
+    if(mmPerPx!=null) qtyM=(glen[g]*mmPerPx/1000)*(1+(estimate.wire.slack||0)/100);
+    else if(estimate.wire.manualLen[g]!=null) qtyM=estimate.wire.manualLen[g]*(1+(estimate.wire.slack||0)/100);
+    const autoQty=qtyM!=null?Math.round(qtyM*10)/10:null;
+    const qty=(wl.qty!=null)?wl.qty:autoQty;
+    rows.push({id:'wire:'+g,kind:'wire',label:WIRE_DEF[g].label,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!wl.off,user:!!wl.user,uncal:(mmPerPx==null&&estimate.wire.manualLen[g]==null)});
+  });
+  if(estimate.wire.conduitOn && mmPerPx!=null){
+    const tot=glen.lighting+glen.outlet+glen.feeder;
+    if(tot>0){
+      const cw=estimate.wire.conduit||{};
+      const sel=(cw.user&&cw.name)?{cat:cw.cat,name:cw.name,spec:cw.spec,work:cw.work}:defaultConduitSel();
+      const rec=sel?findRec(sel):null;
+      const autoQty=Math.round((tot*mmPerPx/1000)*(1+(estimate.wire.slack||0)/100)*10)/10;
+      const qty=(cw.qty!=null)?cw.qty:autoQty;
+      rows.push({id:'conduit:all',kind:'wire',label:'電線管',cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!cw.off,user:!!cw.user});
+    }
+  }
+  return rows;
+}
+function computeTotals(rows){
+  let mat=0,lab=0,exp=0,direct=0;
+  rows.forEach(r=>{ if(r.off||!r.rec||r.qty==null) return; mat+=rnd(r.qty*r.rec.material_cost); lab+=rnd(r.qty*r.rec.labor_cost); exp+=rnd(r.qty*r.rec.expense); direct+=rnd(r.qty*r.rec.composite_price); });
+  const site=rnd(direct*(estimate.opts.siteRate||0)/100);
+  const admin=rnd((direct+site)*(estimate.opts.adminRate||0)/100);
+  const discount=Math.min(estimate.opts.discount||0, direct+site+admin);
+  const taxable=direct+site+admin-discount;
+  const tax=rnd(taxable*(estimate.opts.taxRate||0)/100);
+  return {mat,lab,exp,direct,site,admin,discount,taxable,tax,total:taxable+tax};
+}
+function opt(v,label,sel){ return `<option value="${escAttr(v)}"${sel?' selected':''}>${escHtml(label)}</option>`; }
+function catSelectHtml(r){ const cur=r.sel?r.sel.cat:''; return `<select data-dim="cat" data-id="${escAttr(r.id)}">`+MASTER_IDX.cats.map(c=>opt(c,c,c===cur)).join('')+`</select>`; }
+function nameSelectHtml(r){ const cat=r.sel?r.sel.cat:'',cur=r.sel?r.sel.name:''; const ns=(cat&&MASTER_IDX.byCat.get(cat))?[...new Set(MASTER_IDX.byCat.get(cat).map(x=>x.name))]:[]; return `<select data-dim="name" data-id="${escAttr(r.id)}">`+ns.map(n=>opt(n,n,n===cur)).join('')+`</select>`; }
+function specSelectHtml(r){ const cat=r.sel?r.sel.cat:'',name=r.sel?r.sel.name:''; const g=(cat&&name)?(MASTER_IDX.byName.get(cat+SEP+name)||[]):[]; const cur=r.sel?(r.sel.spec+SEP+(r.sel.work||'')):''; return `<select data-dim="spec" data-id="${escAttr(r.id)}">`+g.map(rec=>{ const key=rec.spec+SEP+(rec.work||''); const lbl=(rec.spec||'(規格なし)')+(rec.work?' ｜ '+rec.work:'')+'  ¥'+rec.composite_price.toLocaleString('ja-JP'); return opt(key,lbl,key===cur); }).join('')+`</select>`; }
+
+el('btn-estimate').onclick=openEstimate;
+el('e-close').onclick=()=>el('modal-estimate').classList.remove('show');
+el('e-csv').onclick=exportEstimateCSV;
+el('e-loadmaster').onclick=()=>el('file-unit').click();
+el('file-unit').addEventListener('change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const j=JSON.parse(r.result); if(Array.isArray(j)&&j.length){ setMaster(j); setMasterChip('ok'); el('e-loadmaster').style.display='none'; renderEstimate(); } else toast('形式が不正です'); }catch(err){ toast('読み込めませんでした'); } }; r.readAsText(f); });
+
+function openEstimate(){ syncEstimateInputs(); el('modal-estimate').classList.add('show'); if(MASTER_IDX){ renderEstimate(); } else { loadMasterUI(); } }
+function syncEstimateInputs(){
+  el('eo-site').value=estimate.opts.siteRate; el('eo-admin').value=estimate.opts.adminRate;
+  el('eo-disc').value=estimate.opts.discount||0; el('eo-tax').value=estimate.opts.taxRate;
+  el('eo-slack').value=estimate.wire.slack; el('eo-round').checked=estimate.opts.roundDown;
+  el('eo-break').checked=estimate.opts.showBreak; el('eo-conduit').checked=estimate.wire.conduitOn;
+  el('eh-name').value=estimate.head.name; el('eh-to').value=estimate.head.to; el('eh-no').value=estimate.head.no; el('eh-date').value=estimate.head.date;
+}
+function setMasterChip(state){
+  const c=el('emaster'); c.className='echip'+(state==='ok'?' ok':state==='err'?' err':'');
+  c.textContent = state==='ok' ? `単価マスタ ${MASTER.length.toLocaleString('ja-JP')}件` : state==='err' ? 'マスタ取得失敗（ファイル選択）' : '単価マスタ 読込中…';
+}
+function loadMasterUI(){ setMasterChip('loading'); loadMaster().then(()=>{ setMasterChip('ok'); renderEstimate(); }).catch(()=>{ setMasterChip('err'); el('e-loadmaster').style.display=''; renderEstimate(); }); }
+
+function renderEstimate(){
+  const body=el('ebody');
+  if(!MASTER_IDX){ body.innerHTML='<div id="enote" style="border:none">単価マスタを読み込んでください。</div>'; el('etot').innerHTML=''; return; }
+  const rows=buildRows();
+  if(!rows.length){ body.innerHTML='<div id="enote" style="border:none">配置がありません。シンボルを配置してから見積を開いてください。</div>'; el('etot').innerHTML=''; return; }
+  const sb=estimate.opts.showBreak;
+  let h='<table class="est"><thead><tr><th></th><th>記号/対象</th><th>分類</th><th>品目</th><th>規格・仕様</th><th class="n">数量</th><th>単位</th>'
+    +(sb?'<th class="n">材料費</th><th class="n">労務費</th><th class="n">経費</th>':'')+'<th class="n">複合単価</th><th class="n">金額</th><th>除外</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    const price=r.rec?r.rec.composite_price:0;
+    const amount=(!r.off&&r.rec&&r.qty!=null)?rnd(r.qty*price):0;
+    const dot=r.off?'':(!r.rec?'r':(r.user?'g':'y'));
+    h+=`<tr data-id="${escAttr(r.id)}"${r.off?' style="opacity:.45"':''}>`
+      +`<td>${dot?`<span class="cdot ${dot}"></span>`:''}</td>`
+      +`<td>${escHtml(r.label)}</td>`
+      +`<td>${catSelectHtml(r)}</td><td>${nameSelectHtml(r)}</td><td>${specSelectHtml(r)}</td>`
+      +`<td class="n"><input class="qty" data-id="${escAttr(r.id)}" type="number" min="0" step="${r.kind==='wire'?'0.1':'1'}" value="${r.qty!=null?r.qty:''}"${r.uncal?' disabled placeholder="—"':''}></td>`
+      +`<td>${escHtml(r.unit||'')}</td>`
+      +(sb?`<td class="n">${r.rec&&r.qty!=null?yen(r.qty*r.rec.material_cost):''}</td><td class="n">${r.rec&&r.qty!=null?yen(r.qty*r.rec.labor_cost):''}</td><td class="n">${r.rec&&r.qty!=null?yen(r.qty*r.rec.expense):''}</td>`:'')
+      +`<td class="n">${r.rec?yen(price):'—'}</td>`
+      +`<td class="n">${r.off?'除外':(r.uncal?'—':(r.rec?yen(amount):'0'))}</td>`
+      +`<td style="text-align:center"><input type="checkbox" class="eoff" data-id="${escAttr(r.id)}"${r.off?' checked':''}></td></tr>`;
+  });
+  h+='</tbody></table>';
+  body.innerHTML=h;
+  body.querySelectorAll('select[data-dim]').forEach(s=>s.addEventListener('change',onSelChange));
+  body.querySelectorAll('input.qty').forEach(i=>i.addEventListener('input',onQtyInput));
+  body.querySelectorAll('input.eoff').forEach(c=>c.addEventListener('change',onOffChange));
+  renderTotals(rows);
+}
+function renderTotals(rows){
+  const t=computeTotals(rows);
+  el('etot').innerHTML=
+    `<span class="tt">材料費<b>¥${yen(t.mat)}</b></span><span class="tt">労務費<b>¥${yen(t.lab)}</b></span><span class="tt">経費<b>¥${yen(t.exp)}</b></span>`
+    +`<span class="tt">直接工事費<b>¥${yen(t.direct)}</b></span>`
+    +(t.site?`<span class="tt">現場管理費<b>¥${yen(t.site)}</b></span>`:'')
+    +(t.admin?`<span class="tt">一般管理費<b>¥${yen(t.admin)}</b></span>`:'')
+    +(t.discount?`<span class="tt">値引<b>-¥${yen(t.discount)}</b></span>`:'')
+    +`<span class="tt">消費税<b>¥${yen(t.tax)}</b></span>`
+    +`<span class="tt grand">見積合計<b>¥${yen(t.total)}</b></span>`;
+}
+function recalcTotalsOnly(){ renderTotals(buildRows()); }
+function rowSelVal(id,dim){ const s=el('ebody').querySelector(`select[data-dim="${dim}"][data-id="${CSS.escape(id)}"]`); return s?s.value:''; }
+function setSelById(id,sel){ const s=storeFor(id); s.cat=sel.cat; s.name=sel.name; s.spec=sel.spec; s.work=sel.work; s.user=true; }
+function onSelChange(e){
+  const id=e.target.dataset.id, dim=e.target.dataset.dim, v=e.target.value;
+  if(dim==='cat'){ const cat=v; const names=[...new Set(MASTER_IDX.byCat.get(cat).map(x=>x.name))]; const name=names[0]; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work}); }
+  else if(dim==='name'){ const cat=rowSelVal(id,'cat'); const name=v; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work}); }
+  else { const cat=rowSelVal(id,'cat'), name=rowSelVal(id,'name'); const i=v.indexOf(SEP); const spec=v.slice(0,i), work=v.slice(i+1); setSelById(id,{cat,name,spec,work}); }
+  renderEstimate();
+}
+function onQtyInput(e){ const id=e.target.dataset.id; const v=parseFloat(e.target.value); const s=storeFor(id); s.qty=(isFinite(v)&&v>=0)?v:null; recalcTotalsOnly(); }
+function onOffChange(e){ const id=e.target.dataset.id; storeFor(id).off=e.target.checked; renderEstimate(); }
+
+el('eo-site').oninput=()=>{ estimate.opts.siteRate=+el('eo-site').value||0; recalcTotalsOnly(); };
+el('eo-admin').oninput=()=>{ estimate.opts.adminRate=+el('eo-admin').value||0; recalcTotalsOnly(); };
+el('eo-disc').oninput=()=>{ estimate.opts.discount=+el('eo-disc').value||0; recalcTotalsOnly(); };
+el('eo-tax').oninput=()=>{ estimate.opts.taxRate=+el('eo-tax').value||0; recalcTotalsOnly(); };
+el('eo-slack').oninput=()=>{ estimate.wire.slack=+el('eo-slack').value||0; renderEstimate(); };
+el('eo-round').onchange=()=>{ estimate.opts.roundDown=el('eo-round').checked; renderEstimate(); };
+el('eo-break').onchange=()=>{ estimate.opts.showBreak=el('eo-break').checked; renderEstimate(); };
+el('eo-conduit').onchange=()=>{ estimate.wire.conduitOn=el('eo-conduit').checked; renderEstimate(); };
+['name','to','no','date'].forEach(k=>{ el('eh-'+k).oninput=()=>{ estimate.head[k]=el('eh-'+k).value; }; });
+
+function exportEstimateCSV(){
+  if(!MASTER_IDX){ toast('先に単価マスタを読み込んでください'); return; }
+  const rows=buildRows(), t=computeTotals(rows), out=[];
+  out.push(['工事名',estimate.head.name]); out.push(['宛先',estimate.head.to]);
+  out.push(['見積番号',estimate.head.no,'見積日',estimate.head.date]); out.push([]);
+  out.push(['No','記号/対象','分類','品目','規格・仕様','施工条件','数量','単位','材料費','労務費','経費','複合単価','金額','備考']);
+  let i=0;
+  rows.forEach(r=>{ if(r.off) return; i++; const price=r.rec?r.rec.composite_price:0; const amt=(r.rec&&r.qty!=null)?rnd(r.qty*price):0;
+    out.push([i,r.label,r.cat,r.sel?r.sel.name:'',r.sel?r.sel.spec:'',r.sel?(r.sel.work||''):'',r.qty!=null?r.qty:'',r.unit,
+      r.rec&&r.qty!=null?rnd(r.qty*r.rec.material_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.labor_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.expense):'',price,amt,r.rec?'':'未マッチ']); });
+  out.push([]);
+  const tl=(k,v)=>{ const row=new Array(10).fill(''); row.push(k,v,''); out.push(row); };
+  tl('材料費計',t.mat); tl('労務費計',t.lab); tl('経費計',t.exp); tl('直接工事費',t.direct);
+  if(t.site)tl('現場管理費('+estimate.opts.siteRate+'%)',t.site);
+  if(t.admin)tl('一般管理費('+estimate.opts.adminRate+'%)',t.admin);
+  if(t.discount)tl('値引',-t.discount);
+  tl('消費税('+estimate.opts.taxRate+'%)',t.tax); tl('見積合計',t.total);
+  out.push([]); out.push(['※単価=複合単価(材+労+直接経費)。丸めにより内訳計と金額は一致しないことがあります。']);
+  out.push(['※現場管理費・一般管理費は工事全体割増で、複合単価内の経費とは二重計上ではありません。']);
+  out.push(['※配線は縮尺較正済みの場合のみ計上します。品目・規格は自動割当のたたき台です。']);
+  const csv='﻿'+out.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  dl(new Blob([csv],{type:'text/csv'}),'mitsumori_'+ts()+'.csv'); toast('見積CSVを書き出しました');
+}
+function csvCell(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+
 // ============ 集計 ============
 function renderTally(){
   document.getElementById('tot').textContent=placed.length;
@@ -1040,7 +1410,7 @@ function renderTally(){
 
 // ============ 保存/読込/出力 ============
 function saveJSON(){
-  const st={ver:'alpha-mvp-3', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq};
+  const st={ver:'alpha-mvp-4', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate};
   const blob=new Blob([JSON.stringify(st)],{type:'application/json'});
   dl(blob,'haichi_'+ts()+'.json'); toast('保存しました');
 }
@@ -1052,6 +1422,7 @@ function loadState(file){
     placed=st.placed||[]; uidSeq=st.uidSeq||(placed.length+1); mmPerPx=st.mmPerPx||null;
     rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
     wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
+    estimate=st.estimate||defaultEstimate();
     if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); } else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); }
     document.getElementById('uploader').style.display='none';
     document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
