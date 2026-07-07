@@ -203,6 +203,15 @@
   #etot .tt{font-size:11px;color:var(--txt-dim)}
   #etot .tt b{color:#fff;font-family:var(--mono);font-size:14px;margin-left:5px}
   #etot .grand b{color:#fff;font-size:20px}
+
+  /* ---- 書き出しメニュー（Step E） ---- */
+  #expwrap{position:relative;display:inline-block}
+  #expmenu{position:absolute;right:0;top:calc(100% + 6px);background:var(--panel2);border:1px solid var(--panel-line);border-radius:10px;box-shadow:0 10px 26px rgba(0,0,0,.5);display:none;z-index:45;min-width:200px;overflow:hidden}
+  #expmenu.show{display:block}
+  #expmenu button{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--panel-line);border-radius:0;color:var(--txt);padding:11px 14px;font-size:12px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #expmenu button:last-child{border-bottom:none}
+  #expmenu button:hover{background:var(--panel3)}
+  #expmenu .note{font-size:10px;color:var(--txt-dim);padding:7px 14px 9px;line-height:1.5}
   #enote{flex:none;font-size:10.5px;color:var(--txt-dim);padding:7px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
   #efoot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
 </style>
@@ -218,6 +227,15 @@
     <button id="btn-autowire">自動配線</button>
     <button id="btn-wire">配線編集</button>
     <button id="btn-estimate">見積</button>
+    <span id="expwrap">
+      <button id="btn-export">書き出し ▾</button>
+      <div id="expmenu">
+        <button id="exp-dxf">完成図 DXF（.dxf）</button>
+        <button id="exp-jww">完成図 JWW（.jww）</button>
+        <button id="exp-print">印刷（PDF保存）</button>
+        <div class="note">DXF/JWWは較正済み実寸[mm]で出力。JWWは自動縮尺（A3基準）。</div>
+      </div>
+    </span>
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
     <span class="spacer"></span>
     <button id="btn-save">保存</button>
@@ -379,6 +397,12 @@
 <input type="file" id="file-base" accept=".pdf,image/*">
 <input type="file" id="file-load" accept=".json,application/json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- DXF⇔JWW 変換エンジン（完成図の書き出し / Step E） -->
+<script src="lib/dxf_jww/jww_writer.js"></script>
+<script src="lib/dxf_jww/jww_reader.js"></script>
+<script src="lib/dxf_jww/dxf_parser.js"></script>
+<script src="lib/dxf_jww/dxf_to_jww.js"></script>
+<script src="lib/dxf_jww/jww_to_dxf.js"></script>
 <script>
 'use strict';
 // ============ シンボル定義（内線規程/JIS風の簡易記号・SVG） ============
@@ -1417,6 +1441,292 @@ function exportEstimateCSV(){
   dl(new Blob([csv],{type:'text/csv'}),'mitsumori_'+ts()+'.csv'); toast('見積CSVを書き出しました');
 }
 function csvCell(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+
+// ============ 完成図の書き出し（DXF/JWW/印刷 / Step E） ============
+// 方針: シンボルSVG定義を実行時にCAD中間表現へ変換し、同一の中間表現から
+// DXF(テキスト/Shift-JIS)とJWW(既存バイナリエンジン)の両方を生成する。
+// 座標系: world px(Y下向き) → 実寸mm(Y上向き=CAD)。塗りは三角形ソリッドの扇形分割。
+const CAD_CAT_LAYER={ '照明':['LIGHT',0], 'コンセント':['OUTLET',1], 'スイッチ':['SWITCH',2],
+  '盤・機器':['PANEL',3], '弱電・防災':['ALARM',4], '配線・接続':['BOX',5] };
+const CAD_WIRE_LAYER=['WIRE',6];
+const CAD_TEXT_ASPECT=0.62;   // 文字幅/高さの概算比
+const CAD_FILL_SEGS=16;       // 塗り円の扇形分割数
+
+// --- SVG path "d" → セグメント列（M/L/H/V/A/Z、相対対応、暗黙の繰返し対応） ---
+function parsePathSegs(d){
+  const toks=d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/g)||[];
+  const subs=[]; let cur=null, cmd=null, x=0,y=0, sx=0,sy=0, i=0;
+  const num=()=>parseFloat(toks[i++]);
+  while(i<toks.length){
+    if(/^[A-Za-z]$/.test(toks[i])){
+      cmd=toks[i++];
+      if(cmd==='Z'||cmd==='z'){
+        if(cur){ if(Math.hypot(x-sx,y-sy)>1e-9) cur.segs.push({k:'L',x1:x,y1:y,x2:sx,y2:sy}); cur.closed=true; }
+        x=sx; y=sy; continue;
+      }
+    }
+    if(cmd==null||cmd==='Z'||cmd==='z'){ i++; continue; }   // コマンド未確定/Z後の余剰は読み飛ばし
+    switch(cmd){
+      case 'M': case 'm': {
+        let nx=num(), ny=num(); if(cmd==='m'){ nx+=x; ny+=y; }
+        x=nx; y=ny; sx=x; sy=y;
+        cur={sx:x, sy:y, segs:[], closed:false}; subs.push(cur);
+        cmd=(cmd==='M')?'L':'l';                             // M直後の連続座標は暗黙のL
+        break; }
+      case 'L': case 'l': { let nx=num(), ny=num(); if(cmd==='l'){ nx+=x; ny+=y; }
+        cur.segs.push({k:'L',x1:x,y1:y,x2:nx,y2:ny}); x=nx; y=ny; break; }
+      case 'H': case 'h': { let nx=num(); if(cmd==='h') nx+=x;
+        cur.segs.push({k:'L',x1:x,y1:y,x2:nx,y2:y}); x=nx; break; }
+      case 'V': case 'v': { let ny=num(); if(cmd==='v') ny+=y;
+        cur.segs.push({k:'L',x1:x,y1:y,x2:x,y2:ny}); y=ny; break; }
+      case 'A': case 'a': {
+        const rx=num(), ry=num(); num();                     // x軸回転は円弧では無視
+        const laf=!!num(), fs=!!num();
+        let nx=num(), ny=num(); if(cmd==='a'){ nx+=x; ny+=y; }
+        cur.segs.push({k:'A',x1:x,y1:y,x2:nx,y2:ny,r:(rx+ry)/2,laf,fs}); x=nx; y=ny; break; }
+      default: i++;                                          // 未対応コマンドは安全に無視
+    }
+  }
+  return subs;
+}
+// --- SVG円弧の端点→中心パラメータ化（SVG仕様F.6.5、円弧rx=ry前提） ---
+function arcToCenter(x1,y1,x2,y2,r,laf,fs){
+  const dx=(x1-x2)/2, dy=(y1-y2)/2, d2=dx*dx+dy*dy;
+  if(d2<1e-12||r<=0) return null;
+  let rr=r; if(d2>rr*rr) rr=Math.sqrt(d2);                   // 半径不足はスケールアップ(仕様)
+  let co=Math.sqrt(Math.max(0,(rr*rr-d2)/d2));
+  if(laf===fs) co=-co;
+  const cx=co*dy+(x1+x2)/2, cy=-co*dx+(y1+y2)/2;
+  const a1=Math.atan2(y1-cy,x1-cx), a2=Math.atan2(y2-cy,x2-cx);
+  let da=a2-a1;
+  if(!fs&&da>0) da-=2*Math.PI;
+  if(fs&&da<0) da+=2*Math.PI;
+  return {cx,cy,r:rr,a1,da};
+}
+// --- サブパスをポリゴンへ平坦化（塗り用。円弧はサンプリング） ---
+function flattenSub(sub){
+  const pts=[[sub.sx,sub.sy]];
+  for(const s of sub.segs){
+    if(s.k==='L'){ pts.push([s.x2,s.y2]); continue; }
+    const c=arcToCenter(s.x1,s.y1,s.x2,s.y2,s.r,s.laf,s.fs);
+    if(!c){ pts.push([s.x2,s.y2]); continue; }
+    const n=Math.max(4,Math.ceil(Math.abs(c.da)/(Math.PI/8)));
+    for(let k=1;k<=n;k++){ const a=c.a1+c.da*k/n; pts.push([c.cx+c.r*Math.cos(a), c.cy+c.r*Math.sin(a)]); }
+  }
+  if(pts.length>1&&Math.hypot(pts[0][0]-pts[pts.length-1][0],pts[0][1]-pts[pts.length-1][1])<1e-9) pts.pop();
+  return pts;
+}
+// --- シンボルSVG → CAD中間プリミティブ（シンボルローカル座標 0..40, Y下向き） ---
+let _irCache={};
+function symbolIR(id){
+  if(_irCache[id]) return _irCache[id];
+  const s=symById(id); if(!s) return [];
+  const prims=[];
+  const doc=new DOMParser().parseFromString('<svg xmlns="http://www.w3.org/2000/svg">'+s.g+'</svg>','image/svg+xml');
+  (function walk(node){
+    for(const e of node.children){
+      const at=n=>e.getAttribute(n), num=n=>parseFloat(e.getAttribute(n)||'0');
+      const fillA=at('fill'), strokeA=at('stroke');
+      const hasFill=fillA!=null&&fillA!=='none', hasStroke=strokeA!=null&&strokeA!=='none';
+      switch(e.tagName){
+        case 'g': walk(e); break;
+        case 'circle': prims.push({k:'circle',cx:num('cx'),cy:num('cy'),r:num('r'),fill:hasFill,stroke:hasStroke}); break;
+        case 'rect': prims.push({k:'rect',x:num('x'),y:num('y'),w:num('width'),h:num('height'),fill:hasFill,stroke:hasStroke}); break;
+        case 'line': prims.push({k:'line',x1:num('x1'),y1:num('y1'),x2:num('x2'),y2:num('y2')}); break;
+        case 'path': {
+          const subs=parsePathSegs(at('d')||'');
+          if(hasFill) for(const sub of subs){ const pts=flattenSub(sub); if(pts.length>=3) prims.push({k:'pathFill',pts}); }
+          if(hasStroke||!hasFill) for(const sub of subs) prims.push({k:'pathStroke',segs:sub.segs});
+          break; }
+        case 'text': prims.push({k:'text',x:num('x'),y:num('y'),h:parseFloat(at('font-size')||'8'),text:e.textContent||''}); break;
+      }
+    }
+  })(doc.documentElement);
+  _irCache[id]=prims;
+  return prims;
+}
+
+// --- 配置＋配線 → CADエンティティ（実寸mm、Y上向き） ---
+function buildCadEntities(){
+  const mm=(mmPerPx!=null)?mmPerPx:1;
+  const ents=[]; const min={x:Infinity,y:Infinity}, max={x:-Infinity,y:-Infinity};
+  const bump=(X,Y)=>{ if(X<min.x)min.x=X; if(X>max.x)max.x=X; if(Y<min.y)min.y=Y; if(Y>max.y)max.y=Y; };
+  const push=(e,lname,lidx,color)=>{ e.lname=lname; e.lidx=lidx; e.color=color; ents.push(e); };
+  const addLine=(x1,y1,x2,y2,L,li,c)=>{ push({t:'line',x1,y1,x2,y2},L,li,c); bump(x1,y1); bump(x2,y2); };
+  const addCircle=(cx,cy,r,L,li,c)=>{ push({t:'circle',cx,cy,r},L,li,c); bump(cx-r,cy-r); bump(cx+r,cy+r); };
+  const addArc=(cx,cy,r,a0,da,L,li,c)=>{ push({t:'arc',cx,cy,r,a0,da},L,li,c);
+    for(let k=0;k<=4;k++){ const a=a0+da*k/4; bump(cx+r*Math.cos(a),cy+r*Math.sin(a)); } };
+  const addTri=(x1,y1,x2,y2,x3,y3,L,li,c)=>{ push({t:'tri',x1,y1,x2,y2,x3,y3},L,li,c); bump(x1,y1); bump(x2,y2); bump(x3,y3); };
+  const fanFill=(pts,L,li,c)=>{ for(let i=1;i<pts.length-1;i++) addTri(pts[0][0],pts[0][1],pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1],L,li,c); };
+
+  for(const p of placed){
+    const s=symById(p.type); if(!s) continue;
+    const [lname,lidx]=CAD_CAT_LAYER[s.cat]||['ETC',7];
+    const col=7;
+    const rot=(p.rot||0)*Math.PI/180, cs=Math.cos(rot), sn=Math.sin(rot);
+    const X=(u,v)=>{ const lx=u-20, ly=v-20;
+      return [ (p.x+lx*cs-ly*sn)*mm, -(p.y+lx*sn+ly*cs)*mm ]; };   // Y反転=鏡映1回
+    for(const pr of symbolIR(p.type)){
+      if(pr.k==='line'){ const [x1,y1]=X(pr.x1,pr.y1), [x2,y2]=X(pr.x2,pr.y2); addLine(x1,y1,x2,y2,lname,lidx,col); }
+      else if(pr.k==='circle'){
+        const [cx,cy]=X(pr.cx,pr.cy), r=pr.r*mm;
+        if(pr.fill){ const pts=[]; for(let k=0;k<CAD_FILL_SEGS;k++){ const a=2*Math.PI*k/CAD_FILL_SEGS; pts.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]); } fanFill(pts,lname,lidx,col); }
+        addCircle(cx,cy,r,lname,lidx,col);
+      }
+      else if(pr.k==='rect'){
+        const c4=[X(pr.x,pr.y),X(pr.x+pr.w,pr.y),X(pr.x+pr.w,pr.y+pr.h),X(pr.x,pr.y+pr.h)];
+        if(pr.fill) fanFill(c4,lname,lidx,col);
+        if(pr.stroke||!pr.fill) for(let i=0;i<4;i++){ const a=c4[i], b=c4[(i+1)%4]; addLine(a[0],a[1],b[0],b[1],lname,lidx,col); }
+      }
+      else if(pr.k==='pathStroke'){
+        for(const sg of pr.segs){
+          const [x1,y1]=X(sg.x1,sg.y1), [x2,y2]=X(sg.x2,sg.y2);
+          if(sg.k==='L'){ addLine(x1,y1,x2,y2,lname,lidx,col); continue; }
+          const c=arcToCenter(x1,y1,x2,y2,sg.r*mm,sg.laf,!sg.fs);   // 鏡映1回→sweep反転
+          if(!c){ addLine(x1,y1,x2,y2,lname,lidx,col); continue; }
+          const a0=(c.da<0)?(c.a1+c.da):c.a1, da=Math.abs(c.da);    // CCW正に正規化
+          addArc(c.cx,c.cy,c.r,a0,da,lname,lidx,col);
+        }
+      }
+      else if(pr.k==='pathFill'){ fanFill(pr.pts.map(q=>X(q[0],q[1])),lname,lidx,col); }
+      else if(pr.k==='text'){
+        const w=pr.h*CAD_TEXT_ASPECT*[...pr.text].length;
+        const [x1,y1]=X(pr.x-w/2,pr.y), [x2,y2]=X(pr.x+w/2,pr.y);
+        const h=pr.h*mm;
+        let ang=-(p.rot||0)%360; if(ang<0)ang+=360;
+        push({t:'text',x1,y1,x2,y2,h,text:pr.text,ang},lname,lidx,col);
+        bump(x1,y1); bump(x2,y2); bump(x1,y1+h); bump(x2,y2+h);
+      }
+    }
+  }
+  for(const w of wires){
+    const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+    if(!a||!b) continue;
+    const c=w.circuit?((w.circuit-1)%8)+1:7;
+    addLine(a.x*mm,-a.y*mm,b.x*mm,-b.y*mm,CAD_WIRE_LAYER[0],CAD_WIRE_LAYER[1],c);
+  }
+  return {ents,min,max,mm};
+}
+
+// --- DXF出力（Shift-JISテキスト。既存DxfWriter流用、EXTMINを原点へシフト） ---
+function dxfBytesFromEnts(ents,min,max){
+  const w=new window.JwwToDxf.DxfWriter();
+  const used=new Set(ents.map(e=>e.lname));
+  ['LIGHT','OUTLET','SWITCH','PANEL','ALARM','BOX','WIRE','ETC'].forEach(n=>{ if(used.has(n)) w.addLayer(n,7); });
+  const sx=-min.x, sy=-min.y;
+  w.writeHeader([0,0],[max.x-min.x,max.y-min.y]);
+  w.writeTables(); w.writeBlocks();
+  w.pair(0,'SECTION'); w.pair(2,'ENTITIES');
+  for(const e of ents){
+    if(e.t==='line') w.line(e.x1+sx,e.y1+sy,e.x2+sx,e.y2+sy,e.lname,e.color);
+    else if(e.t==='circle') w.circle(e.cx+sx,e.cy+sy,e.r,e.lname,e.color);
+    else if(e.t==='arc') w.arc(e.cx+sx,e.cy+sy,e.r,e.a0*180/Math.PI,(e.a0+e.da)*180/Math.PI,e.lname,e.color);
+    else if(e.t==='tri') w.solid([e.x1+sx,e.y1+sy],[e.x2+sx,e.y2+sy],[e.x3+sx,e.y3+sy],[e.x3+sx,e.y3+sy],e.lname,e.color);
+    else if(e.t==='text') w.text(e.x1+sx,e.y1+sy,e.h,e.text,e.ang,e.lname,e.color,CAD_TEXT_ASPECT);
+  }
+  w.pair(0,'ENDSEC'); w.pair(0,'EOF');
+  return window.JwwToDxf.toSjisBytes(w.getText());
+}
+
+// --- JWW出力（紙面mm=実寸/縮尺、原点=図面中心。縮尺は自動選定・A3基準） ---
+async function jwwBytesFromEnts(ents,min,max){
+  const W=window.JwwWriter;
+  const scaleDenom=window.DxfToJww.autoScale({x:min.x,y:min.y},{x:max.x,y:max.y},390,270); // A3から余白1割
+  const ox=(min.x+max.x)/2, oy=(min.y+max.y)/2;
+  const fx=v=>(v-ox)/scaleDenom, fy=v=>(v-oy)/scaleDenom, fr=v=>v/scaleDenom;
+  const setB=(o,e)=>{ o.glayer=0; o.layer=e.lidx; o.penColor=e.color; return o; };
+  const list=[];
+  for(const e of ents){
+    if(e.t==='line') list.push(setB(new W.CDataSen(fx(e.x1),fy(e.y1),fx(e.x2),fy(e.y2)),e));
+    else if(e.t==='circle') list.push(setB(new W.CDataEnko(fx(e.cx),fy(e.cy),fr(e.r),0,2*Math.PI),e));
+    else if(e.t==='arc') list.push(setB(new W.CDataEnko(fx(e.cx),fy(e.cy),fr(e.r),e.a0,e.da),e));
+    else if(e.t==='tri') list.push(setB(new W.CDataSolid(fx(e.x1),fy(e.y1),fx(e.x2),fy(e.y2),fx(e.x3),fy(e.y3)),e));
+    else if(e.t==='text'){
+      const sy2=fr(e.h), sx2=sy2*CAD_TEXT_ASPECT;
+      list.push(setB(new W.CDataMoji(fx(e.x1),fy(e.y1),fx(e.x2),fy(e.y2),e.text,
+        {size_x:sx2,size_y:sy2,kakudo:e.ang,font:'ＭＳ ゴシック'}),e));
+    }
+  }
+  const res=await fetch('lib/dxf_jww/header_template.bin');
+  if(!res.ok) throw new Error('header template fetch failed');
+  const header=new Uint8Array(await res.arrayBuffer());
+  const bytes=await W.buildJww(header,list,scaleDenom,3);    // 図面サイズ3=A3
+  return {bytes,scaleDenom,count:list.length};
+}
+
+// --- 印刷用SVG合成（下敷き＋配線＋シンボル。選択枠等の編集用要素は含めない） ---
+function buildPrintSVG(){
+  const img=baseSrc?`<image href="${baseSrc}" x="0" y="0" width="${baseW}" height="${baseH}"/>`:'';
+  const wl=wires.map(w=>{
+    const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+    if(!a||!b) return '';
+    return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${circuitColor(w.circuit)}" stroke-width="2"/>`;
+  }).join('');
+  const uses=placed.map(p=>{
+    const s=symById(p.type); if(!s) return '';
+    return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${s.color}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${baseW} ${baseH}" width="${baseW}" height="${baseH}">`
+    +`<rect width="100%" height="100%" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}</svg>`;
+}
+
+function exportGuard(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return false; }
+  if(!placed.length&&!wires.length){ toast('書き出す配置がありません'); return false; }
+  return true;
+}
+async function exportDXF(){
+  if(!exportGuard()) return;
+  try{
+    await window.JwwWriter.ensureSjisMap();
+    if(mmPerPx==null) toast('縮尺未設定のため 1px=1mm とみなして出力します');
+    const {ents,min,max}=buildCadEntities();
+    if(!ents.length){ toast('書き出す図形がありません'); return; }
+    const bytes=dxfBytesFromEnts(ents,min,max);
+    dl(new Blob([bytes],{type:'application/dxf'}),'kansei_'+ts()+'.dxf');
+    toast(`DXFを書き出しました（${ents.length}要素）`);
+  }catch(err){ console.error(err); toast('DXF書き出しに失敗しました'); }
+}
+async function exportJWW(){
+  if(!exportGuard()) return;
+  try{
+    await window.JwwWriter.ensureSjisMap();
+    if(mmPerPx==null) toast('縮尺未設定のため 1px=1mm とみなして出力します');
+    const {ents,min,max}=buildCadEntities();
+    if(!ents.length){ toast('書き出す図形がありません'); return; }
+    const r=await jwwBytesFromEnts(ents,min,max);
+    dl(new Blob([r.bytes],{type:'application/octet-stream'}),'kansei_'+ts()+'.jww');
+    toast(`JWWを書き出しました（1/${r.scaleDenom}・${r.count}要素）`);
+  }catch(err){ console.error(err); toast('JWW書き出しに失敗しました（http配信でお試しください）'); }
+}
+function exportPrint(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開いてください'); return; }
+  if(!placed.length&&!baseSrc){ toast('印刷する内容がありません'); return; }
+  const svg=buildPrintSVG();
+  const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+  const img=new Image();
+  img.onload=()=>{
+    const sc=2;
+    const cv=document.createElement('canvas'); cv.width=Math.round(baseW*sc); cv.height=Math.round(baseH*sc);
+    const ctx=cv.getContext('2d'); ctx.scale(sc,sc); ctx.drawImage(img,0,0,baseW,baseH);
+    URL.revokeObjectURL(url);
+    const win=window.open('','_blank');
+    if(!win){ toast('ポップアップがブロックされました'); return; }
+    win.document.write('<!doctype html><html><head><title>印刷（ブラウザの印刷でPDF保存できます）</title>'
+      +'<style>@page{margin:8mm}body{margin:0}img{width:100%}</style></head><body>'
+      +'<img src="'+cv.toDataURL('image/png')+'" onload="setTimeout(function(){window.print()},250)"></body></html>');
+    win.document.close();
+  };
+  img.onerror=()=>{ URL.revokeObjectURL(url); toast('印刷用画像の生成に失敗しました'); };
+  img.src=url;
+}
+
+// メニューUI
+el('btn-export').onclick=ev=>{ ev.stopPropagation(); el('expmenu').classList.toggle('show'); };
+document.addEventListener('pointerdown',ev=>{ if(!ev.target.closest('#expwrap')) el('expmenu').classList.remove('show'); });
+el('exp-dxf').onclick=()=>{ el('expmenu').classList.remove('show'); exportDXF(); };
+el('exp-jww').onclick=()=>{ el('expmenu').classList.remove('show'); exportJWW(); };
+el('exp-print').onclick=()=>{ el('expmenu').classList.remove('show'); exportPrint(); };
 
 // ============ 集計 ============
 function renderTally(){
