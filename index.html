@@ -1536,9 +1536,9 @@ function symbolIR(id){
         case 'path': {
           const subs=parsePathSegs(at('d')||'');
           if(hasFill) for(const sub of subs){ const pts=flattenSub(sub); if(pts.length>=3) prims.push({k:'pathFill',pts}); }
-          if(hasStroke||!hasFill) for(const sub of subs) prims.push({k:'pathStroke',segs:sub.segs});
+          if(hasStroke||!hasFill) for(const sub of subs) prims.push({k:'pathStroke',segs:sub.segs,knock:strokeA==='#12151a'});
           break; }
-        case 'text': prims.push({k:'text',x:num('x'),y:num('y'),h:parseFloat(at('font-size')||'8'),text:e.textContent||''}); break;
+        case 'text': prims.push({k:'text',x:num('x'),y:num('y'),h:parseFloat(at('font-size')||'8'),text:e.textContent||'',knock:fillA==='#12151a'}); break;
       }
     }
   })(doc.documentElement);
@@ -1566,11 +1566,15 @@ function buildCadEntities(){
     const rot=(p.rot||0)*Math.PI/180, cs=Math.cos(rot), sn=Math.sin(rot);
     const X=(u,v)=>{ const lx=u-20, ly=v-20;
       return [ (p.x+lx*cs-ly*sn)*mm, -(p.y+lx*sn+ly*cs)*mm ]; };   // Y反転=鏡映1回
-    for(const pr of symbolIR(p.type)){
+    const prims=symbolIR(p.type);
+    // 「抜き」傍記(画面では背景色#12151aで白抜きに見える)を持つ記号は、
+    // 単色CADで傍記が塗りに埋もれないよう塗りを省略し輪郭＋傍記で表現する
+    const hasKnock=prims.some(q=>q.knock);
+    for(const pr of prims){
       if(pr.k==='line'){ const [x1,y1]=X(pr.x1,pr.y1), [x2,y2]=X(pr.x2,pr.y2); addLine(x1,y1,x2,y2,lname,lidx,col); }
       else if(pr.k==='circle'){
         const [cx,cy]=X(pr.cx,pr.cy), r=pr.r*mm;
-        if(pr.fill){ const pts=[]; for(let k=0;k<CAD_FILL_SEGS;k++){ const a=2*Math.PI*k/CAD_FILL_SEGS; pts.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]); } fanFill(pts,lname,lidx,col); }
+        if(pr.fill&&!hasKnock){ const pts=[]; for(let k=0;k<CAD_FILL_SEGS;k++){ const a=2*Math.PI*k/CAD_FILL_SEGS; pts.push([cx+r*Math.cos(a),cy+r*Math.sin(a)]); } fanFill(pts,lname,lidx,col); }
         addCircle(cx,cy,r,lname,lidx,col);
       }
       else if(pr.k==='rect'){
@@ -1595,7 +1599,10 @@ function buildCadEntities(){
         const h=pr.h*mm;
         let ang=-(p.rot||0)%360; if(ang<0)ang+=360;
         push({t:'text',x1,y1,x2,y2,h,text:pr.text,ang},lname,lidx,col);
-        bump(x1,y1); bump(x2,y2); bump(x1,y1+h); bump(x2,y2+h);
+        { // 文字枠の4隅（ベースラインの90°CCW方向=グリフ上方向。rot=0で従来と同値）
+          const dx=x2-x1, dy=y2-y1, L=Math.hypot(dx,dy)||1, ux=-dy/L*h, uy=dx/L*h;
+          bump(x1,y1); bump(x2,y2); bump(x1+ux,y1+uy); bump(x2+ux,y2+uy);
+        }
       }
     }
   }
@@ -1629,12 +1636,13 @@ function dxfBytesFromEnts(ents,min,max){
 }
 
 // --- JWW出力（紙面mm=実寸/縮尺、原点=図面中心。縮尺は自動選定・A3基準） ---
+const ACI_TO_JWW_PEN={1:1,2:6,3:2,4:4,5:3,6:5,7:7,8:8};   // jww_to_dxf.jsの_JWW_TO_DXF_COLOR_JSの逆写像（往復で色一致）
 async function jwwBytesFromEnts(ents,min,max){
   const W=window.JwwWriter;
   const scaleDenom=window.DxfToJww.autoScale({x:min.x,y:min.y},{x:max.x,y:max.y},390,270); // A3から余白1割
   const ox=(min.x+max.x)/2, oy=(min.y+max.y)/2;
   const fx=v=>(v-ox)/scaleDenom, fy=v=>(v-oy)/scaleDenom, fr=v=>v/scaleDenom;
-  const setB=(o,e)=>{ o.glayer=0; o.layer=e.lidx; o.penColor=e.color; return o; };
+  const setB=(o,e)=>{ o.glayer=0; o.layer=e.lidx; o.penColor=ACI_TO_JWW_PEN[e.color]||7; return o; };
   const list=[];
   for(const e of ents){
     if(e.t==='line') list.push(setB(new W.CDataSen(fx(e.x1),fy(e.y1),fx(e.x2),fy(e.y2)),e));
@@ -1655,19 +1663,36 @@ async function jwwBytesFromEnts(ents,min,max){
 }
 
 // --- 印刷用SVG合成（下敷き＋配線＋シンボル。選択枠等の編集用要素は含めない） ---
+function printInk(c){  // 白背景で見えない明色（盤・機器の#EDEBE4等）は暗色に落とす
+  const m=/^#([0-9a-f]{6})$/i.exec(c||''); if(!m) return c;
+  const v=parseInt(m[1],16), r=(v>>16)&255, g=(v>>8)&255, b=v&255;
+  return (0.299*r+0.587*g+0.114*b)>200 ? '#222' : c;
+}
+function printRect(){  // 用紙範囲∪配置範囲（回転40×40シンボルの外接≒28px余裕）
+  let x0=0, y0=0, x1=baseW, y1=baseH;
+  const M=28;
+  placed.forEach(p=>{ x0=Math.min(x0,p.x-M); x1=Math.max(x1,p.x+M); y0=Math.min(y0,p.y-M); y1=Math.max(y1,p.y+M); });
+  return {vx:Math.floor(x0), vy:Math.floor(y0), vw:Math.ceil(x1-x0), vh:Math.ceil(y1-y0)};
+}
+function printScale(vw,vh){  // canvas面積上限（iOS Safari≒16.7MP）から逆算して2倍を上限にクランプ
+  const MAX_AREA=16000000;
+  return Math.min(2, Math.sqrt(MAX_AREA/Math.max(1,vw*vh)));
+}
 function buildPrintSVG(){
+  const rc=printRect();
   const img=baseSrc?`<image href="${baseSrc}" x="0" y="0" width="${baseW}" height="${baseH}"/>`:'';
   const wl=wires.map(w=>{
     const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
     if(!a||!b) return '';
-    return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${circuitColor(w.circuit)}" stroke-width="2"/>`;
+    return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${printInk(circuitColor(w.circuit))}" stroke-width="2"/>`;
   }).join('');
   const uses=placed.map(p=>{
     const s=symById(p.type); if(!s) return '';
-    return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${s.color}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
+    return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(s.color)}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
   }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${baseW} ${baseH}" width="${baseW}" height="${baseH}">`
-    +`<rect width="100%" height="100%" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}</svg>`;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rc.vx} ${rc.vy} ${rc.vw} ${rc.vh}" width="${rc.vw}" height="${rc.vh}">`
+    +`<rect x="${rc.vx}" y="${rc.vy}" width="${rc.vw}" height="${rc.vh}" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}</svg>`;
+  return {svg, ...rc};
 }
 
 function exportGuard(){
@@ -1702,19 +1727,21 @@ async function exportJWW(){
 function exportPrint(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開いてください'); return; }
   if(!placed.length&&!baseSrc){ toast('印刷する内容がありません'); return; }
-  const svg=buildPrintSVG();
+  const {svg,vw,vh}=buildPrintSVG();
   const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
   const img=new Image();
   img.onload=()=>{
-    const sc=2;
-    const cv=document.createElement('canvas'); cv.width=Math.round(baseW*sc); cv.height=Math.round(baseH*sc);
-    const ctx=cv.getContext('2d'); ctx.scale(sc,sc); ctx.drawImage(img,0,0,baseW,baseH);
+    const sc=printScale(vw,vh);
+    const cv=document.createElement('canvas'); cv.width=Math.round(vw*sc); cv.height=Math.round(vh*sc);
+    const ctx=cv.getContext('2d'); ctx.scale(sc,sc); ctx.drawImage(img,0,0,vw,vh);
     URL.revokeObjectURL(url);
+    const durl=cv.toDataURL('image/png');
+    if(!durl||durl.length<100){ toast('印刷用画像の生成に失敗しました（図面が大きすぎます）'); return; }
     const win=window.open('','_blank');
     if(!win){ toast('ポップアップがブロックされました'); return; }
     win.document.write('<!doctype html><html><head><title>印刷（ブラウザの印刷でPDF保存できます）</title>'
       +'<style>@page{margin:8mm}body{margin:0}img{width:100%}</style></head><body>'
-      +'<img src="'+cv.toDataURL('image/png')+'" onload="setTimeout(function(){window.print()},250)"></body></html>');
+      +'<img src="'+durl+'" onload="setTimeout(function(){window.print()},250)"></body></html>');
     win.document.close();
   };
   img.onerror=()=>{ URL.revokeObjectURL(url); toast('印刷用画像の生成に失敗しました'); };
@@ -1723,7 +1750,8 @@ function exportPrint(){
 
 // メニューUI
 el('btn-export').onclick=ev=>{ ev.stopPropagation(); el('expmenu').classList.toggle('show'); };
-document.addEventListener('pointerdown',ev=>{ if(!ev.target.closest('#expwrap')) el('expmenu').classList.remove('show'); });
+// キャプチャ段で監視（配灯パネル等のstopPropagationはバブル段のみ止めるため確実に閉じる）
+document.addEventListener('pointerdown',ev=>{ if(!ev.target.closest('#expwrap')) el('expmenu').classList.remove('show'); },true);
 el('exp-dxf').onclick=()=>{ el('expmenu').classList.remove('show'); exportDXF(); };
 el('exp-jww').onclick=()=>{ el('expmenu').classList.remove('show'); exportJWW(); };
 el('exp-print').onclick=()=>{ el('expmenu').classList.remove('show'); exportPrint(); };
