@@ -113,7 +113,7 @@
   .mbox .btns button{flex:1;padding:11px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);font-size:13px;font-weight:700;font-family:var(--jp);cursor:pointer}
   .mbox .btns button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
   input[type=file]{display:none}
-  .toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:50;background:var(--confirmed);color:#fff;padding:9px 16px;border-radius:9px;font-size:12.5px;font-weight:700;opacity:0;transition:opacity .25s;pointer-events:none}
+  .toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:80;background:var(--confirmed);color:#fff;padding:9px 16px;border-radius:9px;font-size:12.5px;font-weight:700;opacity:0;transition:opacity .25s;pointer-events:none}
   .toast.show{opacity:1}
 
   /* ---- 自動配灯（Step B） ---- */
@@ -1122,8 +1122,8 @@ const SYMMAP={
   exit:{cats:['照明器具'],kw:['誘導灯'],unit:'個'},
   emg_inc:{cats:['照明器具'],kw:['非常用'],unit:'個'},
   emg_fl:{cats:['照明器具'],kw:['非常用'],unit:'個'},
-  outlet:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],unit:'個'},
-  outlet2p:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],unit:'個'},
+  outlet:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],pref:'2P 15A×1',unit:'個'},
+  outlet2p:{cats:['スイッチ・コンセント'],kw:['埋込形コンセント'],pref:'2P 15A×2',unit:'個'},
   outletE:{cats:['スイッチ・コンセント'],kw:['コンセント','接地極'],unit:'個'},
   outletET:{cats:['スイッチ・コンセント'],kw:['コンセント','接地端子'],unit:'個'},
   outletLK:{cats:['スイッチ・コンセント'],kw:['コンセント','抜'],unit:'個'},
@@ -1131,17 +1131,17 @@ const SYMMAP={
   outlet2P:{cats:['スイッチ・コンセント'],kw:['コンセント','200'],unit:'個'},
   outlet3P:{cats:['スイッチ・コンセント'],kw:['コンセント','3P'],unit:'個'},
   outletF:{cats:['スイッチ・コンセント'],kw:['アップコンセント'],unit:'個'},
-  sw:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ'],unit:'個'},
-  sw3:{cats:['スイッチ・コンセント'],kw:['スイッチ','3路'],unit:'個'},
-  sw4:{cats:['スイッチ・コンセント'],kw:['スイッチ','4路'],unit:'個'},
-  swP:{cats:['スイッチ・コンセント'],kw:['スイッチ','位置'],unit:'個'},
-  swL:{cats:['スイッチ・コンセント'],kw:['スイッチ','確認'],unit:'個'},
+  sw:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ'],pref:'1P 15A×1',unit:'個'},
+  sw3:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','3w'],unit:'個'},
+  sw4:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','4w'],unit:'個'},
+  swP:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','pl'],unit:'個'},
+  swL:{cats:['スイッチ・コンセント'],kw:['埋込形スイッチ','pl'],unit:'個'},
   swDim:{cats:['スイッチ・コンセント'],kw:['調光'],unit:'個'},
   swW:{cats:['スイッチ・コンセント'],kw:['防水形スイッチ'],unit:'個'},
   swAuto:{cats:['スイッチ・コンセント'],kw:['自動点滅'],unit:'個'},
   panelD:{cats:['分電盤・開閉器'],kw:['分電盤'],unit:'面'},
-  panelH:{cats:['分電盤・開閉器'],kw:['配電盤'],unit:'面'},
-  panelC:{cats:['分電盤・開閉器','受変電設備'],kw:['制御盤'],unit:'面'},
+  panelH:{cats:['分電盤・開閉器','受変電設備'],kw:['分電盤'],unit:'面'},
+  panelC:{cats:['分電盤・開閉器','受変電設備','住宅・換気・空調設備'],kw:['制御盤'],unit:'面'},
   motor:{cats:['住宅・換気・空調設備','取付け費'],kw:['電動機'],unit:'台'},
   fan:{cats:['住宅・換気・空調設備'],kw:['換気扇'],unit:'台'},
   lan:{cats:['スイッチ・コンセント','弱電機器（インターホン・TV等）'],kw:['情報用モジュラージャック'],unit:'個'},
@@ -1195,7 +1195,8 @@ function medianRec(cat,name){ const g=MASTER_IDX.byName.get(cat+SEP+name); if(!g
 function findRec(sel){
   if(!sel||!MASTER_IDX) return null;
   const g=MASTER_IDX.byName.get(sel.cat+SEP+sel.name); if(!g) return null;
-  return g.find(r=>r.spec===sel.spec && (sel.work==null||r.work===sel.work)) || g.find(r=>r.spec===sel.spec) || g[0];
+  if(sel.idx!=null && g[sel.idx] && g[sel.idx].spec===sel.spec && (sel.work==null||g[sel.idx].work===sel.work)) return g[sel.idx];
+  return g.find(r=>r.spec===sel.spec && (sel.work==null||r.work===sel.work)) || g.find(r=>r.spec===sel.spec) || null;
 }
 function candidatesFor(id){
   const m=SYMMAP[id]; if(!m||!MASTER_IDX) return [];
@@ -1204,9 +1205,16 @@ function candidatesFor(id){
   return pool.map(r=>{ let s=0; kws.forEach(k=>{ if(r._n.includes(k)) s+=5; }); if(m.unit&&r.unit!==m.unit) s-=3; if(r.category.includes('再使用')) s-=6; return {r,s}; })
     .filter(x=>x.s>0).sort((a,b)=>b.s-a.s).map(x=>x.r);
 }
+function scoreRec(m,r){ let s=0; m.kw.map(normStr).forEach(k=>{ if(r._n.includes(k)) s+=5; }); if(m.unit&&r.unit!==m.unit) s-=3; if(r.category.includes('再使用')) s-=6; return s; }
 function defaultSel(id){
+  const m=SYMMAP[id]; if(!m||!MASTER_IDX) return null;
   const c=candidatesFor(id); if(!c.length) return null;
-  const cat=c[0].category, name=c[0].name; const rec=medianRec(cat,name)||c[0];
+  const top=scoreRec(m,c[0]);                    // 最上位スコア(=キーワード最多一致)の記号を採用
+  const cat=c[0].category, name=c[0].name;
+  const sub=c.filter(r=>r.category===cat&&r.name===name&&scoreRec(m,r)===top);
+  const arr=(sub.length?sub:c.filter(r=>r.category===cat&&r.name===name)).slice().sort((a,b)=>a.composite_price-b.composite_price);
+  // pref 指定があれば標準仕様を優先、無ければ中央値（極端な最安/最高額を避ける）
+  const rec=(m.pref && (sub.find(r=>r.spec===m.pref)||arr.find(r=>r.spec===m.pref))) || arr[Math.floor(arr.length/2)];
   return {cat,name,spec:rec.spec,work:rec.work};
 }
 function defaultCableSel(specHint){
@@ -1277,7 +1285,7 @@ function computeTotals(rows){
   rows.forEach(r=>{ if(r.off||!r.rec||r.qty==null) return; mat+=rnd(r.qty*r.rec.material_cost); lab+=rnd(r.qty*r.rec.labor_cost); exp+=rnd(r.qty*r.rec.expense); direct+=rnd(r.qty*r.rec.composite_price); });
   const site=rnd(direct*(estimate.opts.siteRate||0)/100);
   const admin=rnd((direct+site)*(estimate.opts.adminRate||0)/100);
-  const discount=Math.min(estimate.opts.discount||0, direct+site+admin);
+  const discount=Math.min(Math.max(0,estimate.opts.discount||0), direct+site+admin);
   const taxable=direct+site+admin-discount;
   const tax=rnd(taxable*(estimate.opts.taxRate||0)/100);
   return {mat,lab,exp,direct,site,admin,discount,taxable,tax,total:taxable+tax};
@@ -1285,7 +1293,7 @@ function computeTotals(rows){
 function opt(v,label,sel){ return `<option value="${escAttr(v)}"${sel?' selected':''}>${escHtml(label)}</option>`; }
 function catSelectHtml(r){ const cur=r.sel?r.sel.cat:''; return `<select data-dim="cat" data-id="${escAttr(r.id)}">`+MASTER_IDX.cats.map(c=>opt(c,c,c===cur)).join('')+`</select>`; }
 function nameSelectHtml(r){ const cat=r.sel?r.sel.cat:'',cur=r.sel?r.sel.name:''; const ns=(cat&&MASTER_IDX.byCat.get(cat))?[...new Set(MASTER_IDX.byCat.get(cat).map(x=>x.name))]:[]; return `<select data-dim="name" data-id="${escAttr(r.id)}">`+ns.map(n=>opt(n,n,n===cur)).join('')+`</select>`; }
-function specSelectHtml(r){ const cat=r.sel?r.sel.cat:'',name=r.sel?r.sel.name:''; const g=(cat&&name)?(MASTER_IDX.byName.get(cat+SEP+name)||[]):[]; const cur=r.sel?(r.sel.spec+SEP+(r.sel.work||'')):''; return `<select data-dim="spec" data-id="${escAttr(r.id)}">`+g.map(rec=>{ const key=rec.spec+SEP+(rec.work||''); const lbl=(rec.spec||'(規格なし)')+(rec.work?' ｜ '+rec.work:'')+'  ¥'+rec.composite_price.toLocaleString('ja-JP'); return opt(key,lbl,key===cur); }).join('')+`</select>`; }
+function specSelectHtml(r){ const cat=r.sel?r.sel.cat:'',name=r.sel?r.sel.name:''; const g=(cat&&name)?(MASTER_IDX.byName.get(cat+SEP+name)||[]):[]; const curIdx=r.rec?g.indexOf(r.rec):-1; return `<select data-dim="spec" data-id="${escAttr(r.id)}">`+g.map((rec,i)=>{ const lbl=(rec.spec||'(規格なし)')+(rec.work?' ｜ '+rec.work:'')+(rec.note?' ｜ '+rec.note:'')+'  ¥'+rec.composite_price.toLocaleString('ja-JP'); return opt(String(i),lbl,i===curIdx); }).join('')+`</select>`; }
 
 el('btn-estimate').onclick=openEstimate;
 el('e-close').onclick=()=>el('modal-estimate').classList.remove('show');
@@ -1323,11 +1331,11 @@ function renderEstimate(){
       +`<td>${dot?`<span class="cdot ${dot}"></span>`:''}</td>`
       +`<td>${escHtml(r.label)}</td>`
       +`<td>${catSelectHtml(r)}</td><td>${nameSelectHtml(r)}</td><td>${specSelectHtml(r)}</td>`
-      +`<td class="n"><input class="qty" data-id="${escAttr(r.id)}" type="number" min="0" step="${r.kind==='wire'?'0.1':'1'}" value="${r.qty!=null?r.qty:''}"${r.uncal?' disabled placeholder="—"':''}></td>`
+      +`<td class="n"><input class="qty" data-id="${escAttr(r.id)}" type="number" min="0" step="${r.kind==='wire'?'0.1':'1'}" value="${r.qty!=null?r.qty:''}"${r.uncal?' disabled placeholder="—"':(r.autoQty!=null?' placeholder="'+r.autoQty+'"':'')}></td>`
       +`<td>${escHtml(r.unit||'')}</td>`
-      +(sb?`<td class="n">${r.rec&&r.qty!=null?yen(r.qty*r.rec.material_cost):''}</td><td class="n">${r.rec&&r.qty!=null?yen(r.qty*r.rec.labor_cost):''}</td><td class="n">${r.rec&&r.qty!=null?yen(r.qty*r.rec.expense):''}</td>`:'')
+      +(sb?`<td class="n" data-mat>${r.rec&&r.qty!=null?yen(r.qty*r.rec.material_cost):''}</td><td class="n" data-lab>${r.rec&&r.qty!=null?yen(r.qty*r.rec.labor_cost):''}</td><td class="n" data-exp>${r.rec&&r.qty!=null?yen(r.qty*r.rec.expense):''}</td>`:'')
       +`<td class="n">${r.rec?yen(price):'—'}</td>`
-      +`<td class="n">${r.off?'除外':(r.uncal?'—':(r.rec?yen(amount):'0'))}</td>`
+      +`<td class="n" data-amt>${r.off?'除外':(r.uncal?'—':(r.rec?yen(amount):'0'))}</td>`
       +`<td style="text-align:center"><input type="checkbox" class="eoff" data-id="${escAttr(r.id)}"${r.off?' checked':''}></td></tr>`;
   });
   h+='</tbody></table>';
@@ -1350,20 +1358,34 @@ function renderTotals(rows){
 }
 function recalcTotalsOnly(){ renderTotals(buildRows()); }
 function rowSelVal(id,dim){ const s=el('ebody').querySelector(`select[data-dim="${dim}"][data-id="${CSS.escape(id)}"]`); return s?s.value:''; }
-function setSelById(id,sel){ const s=storeFor(id); s.cat=sel.cat; s.name=sel.name; s.spec=sel.spec; s.work=sel.work; s.user=true; }
+function setSelById(id,sel){ const s=storeFor(id); s.cat=sel.cat; s.name=sel.name; s.spec=sel.spec; s.work=sel.work; s.idx=(sel.idx==null?null:sel.idx); s.user=true; }
+function idxOfRec(cat,name,rec){ const g=MASTER_IDX.byName.get(cat+SEP+name)||[]; return g.indexOf(rec); }
 function onSelChange(e){
   const id=e.target.dataset.id, dim=e.target.dataset.dim, v=e.target.value;
-  if(dim==='cat'){ const cat=v; const names=[...new Set(MASTER_IDX.byCat.get(cat).map(x=>x.name))]; const name=names[0]; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work}); }
-  else if(dim==='name'){ const cat=rowSelVal(id,'cat'); const name=v; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work}); }
-  else { const cat=rowSelVal(id,'cat'), name=rowSelVal(id,'name'); const i=v.indexOf(SEP); const spec=v.slice(0,i), work=v.slice(i+1); setSelById(id,{cat,name,spec,work}); }
+  if(dim==='cat'){ const cat=v; const name=[...new Set(MASTER_IDX.byCat.get(cat).map(x=>x.name))][0]; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work,idx:idxOfRec(cat,name,rec)}); }
+  else if(dim==='name'){ const cat=rowSelVal(id,'cat'), name=v; const rec=medianRec(cat,name); setSelById(id,{cat,name,spec:rec.spec,work:rec.work,idx:idxOfRec(cat,name,rec)}); }
+  else { const cat=rowSelVal(id,'cat'), name=rowSelVal(id,'name'); const g=MASTER_IDX.byName.get(cat+SEP+name)||[]; const idx=+v; const rec=g[idx]; if(rec) setSelById(id,{cat,name,spec:rec.spec,work:rec.work,idx}); }
   renderEstimate();
 }
-function onQtyInput(e){ const id=e.target.dataset.id; const v=parseFloat(e.target.value); const s=storeFor(id); s.qty=(isFinite(v)&&v>=0)?v:null; recalcTotalsOnly(); }
+function onQtyInput(e){
+  const id=e.target.dataset.id; const val=e.target.value.trim(); const v=parseFloat(val);
+  const s=storeFor(id); s.qty=(val!==''&&isFinite(v)&&v>=0)?v:null;   // 空欄=自動数量に戻す
+  patchRowAmount(id); recalcTotalsOnly();
+}
+function patchRowAmount(id){
+  const row=buildRows().find(r=>r.id===id); if(!row) return;
+  const tr=el('ebody').querySelector(`tr[data-id="${CSS.escape(id)}"]`); if(!tr) return;
+  const price=row.rec?row.rec.composite_price:0;
+  const amount=(!row.off&&row.rec&&row.qty!=null)?rnd(row.qty*price):0;
+  const at=tr.querySelector('[data-amt]'); if(at) at.textContent=row.off?'除外':(row.uncal?'—':(row.rec?yen(amount):'0'));
+  const set=(sel,cost)=>{ const c=tr.querySelector(sel); if(c) c.textContent=(row.rec&&row.qty!=null)?yen(row.qty*cost):''; };
+  if(estimate.opts.showBreak && row.rec){ set('[data-mat]',row.rec.material_cost); set('[data-lab]',row.rec.labor_cost); set('[data-exp]',row.rec.expense); }
+}
 function onOffChange(e){ const id=e.target.dataset.id; storeFor(id).off=e.target.checked; renderEstimate(); }
 
 el('eo-site').oninput=()=>{ estimate.opts.siteRate=+el('eo-site').value||0; recalcTotalsOnly(); };
 el('eo-admin').oninput=()=>{ estimate.opts.adminRate=+el('eo-admin').value||0; recalcTotalsOnly(); };
-el('eo-disc').oninput=()=>{ estimate.opts.discount=+el('eo-disc').value||0; recalcTotalsOnly(); };
+el('eo-disc').oninput=()=>{ estimate.opts.discount=Math.max(0,+el('eo-disc').value||0); recalcTotalsOnly(); };
 el('eo-tax').oninput=()=>{ estimate.opts.taxRate=+el('eo-tax').value||0; recalcTotalsOnly(); };
 el('eo-slack').oninput=()=>{ estimate.wire.slack=+el('eo-slack').value||0; renderEstimate(); };
 el('eo-round').onchange=()=>{ estimate.opts.roundDown=el('eo-round').checked; renderEstimate(); };
@@ -1382,7 +1404,7 @@ function exportEstimateCSV(){
     out.push([i,r.label,r.cat,r.sel?r.sel.name:'',r.sel?r.sel.spec:'',r.sel?(r.sel.work||''):'',r.qty!=null?r.qty:'',r.unit,
       r.rec&&r.qty!=null?rnd(r.qty*r.rec.material_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.labor_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.expense):'',price,amt,r.rec?'':'未マッチ']); });
   out.push([]);
-  const tl=(k,v)=>{ const row=new Array(10).fill(''); row.push(k,v,''); out.push(row); };
+  const tl=(k,v)=>{ const row=new Array(11).fill(''); row.push(k,v); out.push(row); };
   tl('材料費計',t.mat); tl('労務費計',t.lab); tl('経費計',t.exp); tl('直接工事費',t.direct);
   if(t.site)tl('現場管理費('+estimate.opts.siteRate+'%)',t.site);
   if(t.admin)tl('一般管理費('+estimate.opts.adminRate+'%)',t.admin);
