@@ -158,6 +158,17 @@
   #modal-layout .btns{display:flex;gap:9px;margin-top:2px}
   #modal-layout .btns button{flex:1;padding:11px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);font-size:13px;font-weight:700;font-family:var(--jp);cursor:pointer}
   #modal-layout .btns button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
+
+  /* ---- 自動配線（Step C） ---- */
+  #stage.wire{cursor:pointer}
+  .wire{pointer-events:none}
+  .wpendmark{display:none}
+  .sym.wpend .wpendmark{display:block}
+  header button.on{background:var(--redline);border-color:var(--redline);color:#fff}
+  #wireinfo{flex:none;border-top:1px solid var(--panel-line);padding:9px 12px;max-height:36%;overflow-y:auto}
+  #wireinfo:empty{display:none}
+  #wireinfo .witit{font-size:11.5px;color:var(--txt-dim);margin-bottom:7px;line-height:1.5}
+  #wireinfo .witit b{color:#fff}
 </style>
 </head>
 <body>
@@ -168,6 +179,8 @@
     <button id="btn-open">図面を開く</button>
     <button id="btn-calib">縮尺を設定</button>
     <button id="btn-layout">自動配灯</button>
+    <button id="btn-autowire">自動配線</button>
+    <button id="btn-wire">配線編集</button>
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
     <span class="spacer"></span>
     <button id="btn-save">保存</button>
@@ -184,6 +197,7 @@
           <defs id="symdefs"></defs>
           <g id="calibg"></g>
           <g id="layoutg"></g>
+          <g id="wireg"></g>
           <g id="symg"></g>
         </svg>
       </div>
@@ -250,6 +264,7 @@
         <div class="cnt">配置数 <b id="tot">0</b> 点</div>
       </div>
       <div id="tallybody"></div>
+      <div id="wireinfo"></div>
       <div class="foot">
         <button id="btn-csv">集計CSV</button>
         <button id="btn-clear">全消去</button>
@@ -426,6 +441,13 @@ let roomSeq = 1;
 let layoutMode = false;
 let layoutPts = [];       // 部屋の対角点 world座標(最大2)
 let layoutDraft = null;   // {rect:{x0,y0,w,h},nx,ny,type,lumen}  設定パネル表示中
+// 自動配線（Step C）
+let wires = [];           // {uid,a,b,circuit,kind,auto}  a,b は接続シンボルuid、kind:feed/power/sw/manual
+let wireSeq = 1;
+let wireMode = false;     // 配線編集モード
+let wirePendA = null;     // 結線の1点目 uid
+const CIRC_COLORS = ['#E2452B','#3F72C4','#1F9A60','#D99A24','#8B5CF6','#26C6DA','#EC4899','#84CC16','#F97316','#14B8A6'];
+function circuitColor(n){ return n ? CIRC_COLORS[(n-1)%CIRC_COLORS.length] : '#9AA0AA'; }
 
 const stage=document.getElementById('stage');
 const world=document.getElementById('world');
@@ -433,6 +455,7 @@ const overlay=document.getElementById('overlay');
 const symg=document.getElementById('symg');
 const calibg=document.getElementById('calibg');
 const layoutg=document.getElementById('layoutg');
+const wireg=document.getElementById('wireg');
 const baseimg=document.getElementById('baseimg');
 const baseEl=document.getElementById('base');
 
@@ -467,6 +490,7 @@ function symById(id){return SYMBOLS.find(s=>s.id===id);}
 })();
 function setTool(id){
   if(layoutMode) endLayout();
+  if(wireMode) endWireMode();
   curTool=id; selUid=null; renderSel();
   document.querySelectorAll('.palbtn').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
   stage.classList.toggle('placing',!!id && !calibMode);
@@ -547,17 +571,22 @@ function renderSyms(){
     const s=symById(p.type); if(!s)return '';
     const cx=p.x, cy=p.y;
     const sel=(p.uid===selUid)?' sel':'';
-    return `<g class="sym${sel}" data-uid="${p.uid}" transform="translate(${cx},${cy}) rotate(${p.rot})" style="color:${s.color}">
+    const wp=(p.uid===wirePendA)?' wpend':'';
+    return `<g class="sym${sel}${wp}" data-uid="${p.uid}" transform="translate(${cx},${cy}) rotate(${p.rot})" style="color:${s.color}">
+      <rect x="${-SZ/2}" y="${-SZ/2}" width="${SZ}" height="${SZ}" fill="none" pointer-events="all"/>
       <rect class="selbox" x="${-SZ/2-4}" y="${-SZ/2-4}" width="${SZ+8}" height="${SZ+8}" rx="4" fill="rgba(226,69,43,.1)" stroke="#E2452B" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+      <circle class="wpendmark" cx="0" cy="0" r="${SZ/2+3}" fill="none" stroke="#26C6DA" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
       <g transform="translate(${-SZ/2},${-SZ/2})"><use href="#sym-${s.id}"/></g>
     </g>`;
   }).join('');
   symg.querySelectorAll('.sym').forEach(g=>{
     g.addEventListener('pointerdown',ev=>{
       if(layoutMode||calibMode) return; // 較正/配灯中は stage に委譲（対角点を記号の上でも打てる）
+      if(wireMode){ ev.stopPropagation(); handleWireSymTap(+g.dataset.uid); return; }
       ev.stopPropagation(); startDragSym(ev, +g.dataset.uid);
     });
   });
+  renderWires();
 }
 function renderSel(){
   const bar=document.getElementById('selbar');
@@ -568,7 +597,7 @@ function renderSel(){
 }
 document.getElementById('sel-rotL').onclick=()=>rotateSel(-15);
 document.getElementById('sel-rotR').onclick=()=>rotateSel(15);
-document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; placed=placed.filter(x=>x.uid!==selUid); selUid=null; renderSyms(); renderSel(); renderTally(); };
+document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; placed=placed.filter(x=>x.uid!==selUid); wires=wires.filter(w=>w.a!==selUid&&w.b!==selUid); selUid=null; renderSyms(); renderSel(); renderTally(); renderWireInfo(); };
 function rotateSel(d){ const p=placed.find(x=>x.uid===selUid); if(!p)return; p.rot=(p.rot+d)%360; renderSyms(); }
 
 // ============ ポインタ操作（配置/選択/移動/パン/較正） ============
@@ -577,6 +606,7 @@ let dragSym=null, dragMoved=false, panStart=null;
 stage.addEventListener('pointerdown',ev=>{
   if(calibMode){ handleCalibClick(ev); return; }
   if(layoutMode){ handleLayoutClick(ev); return; }
+  if(wireMode && wirePendA!=null){ wirePendA=null; renderSyms(); } // 空白タップで結線1点目を解除（パンは継続）
   if(curTool){ // 配置モード：置く
     const w=toWorld(ev.clientX,ev.clientY);
     addSymbol(curTool,w.x,w.y);
@@ -602,7 +632,7 @@ stage.addEventListener('pointerup',ev=>{
   if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y); if(moved<4){ selUid=null; renderSyms(); renderSel(); } panStart=null; stage.classList.remove('panning'); }
 });
 function startDragSym(ev,uid){
-  if(curTool||calibMode||layoutMode)return;
+  if(curTool||calibMode||layoutMode||wireMode)return;
   selUid=uid; renderSyms(); renderSel();
   dragSym=placed.find(x=>x.uid===uid); dragMoved=false;
   stage.setPointerCapture(ev.pointerId);
@@ -852,6 +882,142 @@ function placeRoomLights(room){
   el('lumen-use').addEventListener('change',e=>{ el('lumen-E').value=e.target.value; });
 })();
 
+// ============ 自動配線（単線図 / Step C） ============
+function catOf(p){ const s=symById(p.type); return s?s.cat:''; }
+function wireLenPx(w){ const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b); if(!a||!b)return 0; return Math.hypot(a.x-b.x,a.y-b.y); }
+
+// 近接クラスタリング（union-find）：閾値内で連結する点を同一グループに
+function clusterByProximity(items, thr){
+  const n=items.length; if(!n) return [];
+  const par=[...Array(n).keys()];
+  const find=i=>{ while(par[i]!==i){ par[i]=par[par[i]]; i=par[i]; } return i; };
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+    if(Math.hypot(items[i].x-items[j].x, items[i].y-items[j].y)<=thr) par[find(i)]=find(j);
+  }
+  const g={}; items.forEach((it,i)=>{ const r=find(i); (g[r]=g[r]||[]).push(it); });
+  return Object.values(g);
+}
+// 最小全域木（Prim）：点群を最短の総配線長で数珠つなぎする辺 [[uidA,uidB],...]
+function mstEdges(pts){
+  const n=pts.length; if(n<2) return [];
+  const inT=new Array(n).fill(false), dist=new Array(n).fill(Infinity), near=new Array(n).fill(0), edges=[];
+  inT[0]=true; dist[0]=0;
+  for(let i=1;i<n;i++){ dist[i]=Math.hypot(pts[i].x-pts[0].x,pts[i].y-pts[0].y); near[i]=0; }
+  for(let c=1;c<n;c++){
+    let best=-1,bd=Infinity;
+    for(let i=0;i<n;i++) if(!inT[i]&&dist[i]<bd){ bd=dist[i]; best=i; }
+    if(best<0) break;
+    inT[best]=true; edges.push([pts[near[best]].uid, pts[best].uid]);
+    for(let i=0;i<n;i++) if(!inT[i]){
+      const d=Math.hypot(pts[i].x-pts[best].x,pts[i].y-pts[best].y);
+      if(d<dist[i]){ dist[i]=d; near[i]=best; }
+    }
+  }
+  return edges;
+}
+
+el('btn-autowire').onclick=autoWire;
+function autoWire(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(!placed.length){ toast('先にシンボルを配置してください'); return; }
+  wires=wires.filter(w=>!w.auto);            // 手動配線は保持
+  placed.forEach(p=>{ p.circuit=null; });
+  const thr = mmPerPx ? 8000/mmPerPx : Math.min(baseW,baseH)*0.28;  // 同一回路とみなす近接閾値（≒8m）
+  let circ=0; const circuits=[];
+  // 照明：部屋(rooms[])ごとに1回路
+  rooms.forEach(r=>{
+    const lts=placed.filter(p=>p.roomId===r.rid && catOf(p)==='照明');
+    if(lts.length){ circ++; lts.forEach(p=>p.circuit=circ); circuits.push({no:circ,devices:lts}); }
+  });
+  // 照明：部屋に属さないものは近接クラスタごとに回路
+  clusterByProximity(placed.filter(p=>catOf(p)==='照明'&&p.circuit==null), thr)
+    .forEach(cl=>{ circ++; cl.forEach(p=>p.circuit=circ); circuits.push({no:circ,devices:cl}); });
+  // コンセント：近接クラスタごとに回路
+  clusterByProximity(placed.filter(p=>catOf(p)==='コンセント'), thr)
+    .forEach(cl=>{ circ++; cl.forEach(p=>p.circuit=circ); circuits.push({no:circ,devices:cl}); });
+  // 各回路を最近傍で数珠つなぎ（MST）
+  circuits.forEach(c=>{
+    mstEdges(c.devices.map(p=>({uid:p.uid,x:p.x,y:p.y}))).forEach(([a,b])=>
+      wires.push({uid:wireSeq++,a,b,circuit:c.no,kind:'feed',auto:true}));
+  });
+  // 分電盤/配電盤があれば各回路の最寄り機器へ電源送り
+  const panels=placed.filter(p=>p.type==='panelD'||p.type==='panelH');
+  if(panels.length){
+    circuits.forEach(c=>{
+      let best=null;
+      c.devices.forEach(d=>panels.forEach(pn=>{ const dd=Math.hypot(d.x-pn.x,d.y-pn.y); if(!best||dd<best.dd) best={dd,dev:d,pn}; }));
+      if(best) wires.push({uid:wireSeq++,a:best.pn.uid,b:best.dev.uid,circuit:c.no,kind:'power',auto:true});
+    });
+  }
+  // スイッチ→最寄り照明を結線（JB結線は省略＝実務の見やすい単線図）
+  const lights=placed.filter(p=>catOf(p)==='照明');
+  placed.filter(p=>catOf(p)==='スイッチ').forEach(sw=>{
+    let best=null; lights.forEach(l=>{ const d=Math.hypot(sw.x-l.x,sw.y-l.y); if(!best||d<best.d) best={d,l}; });
+    if(best){ sw.circuit=best.l.circuit; wires.push({uid:wireSeq++,a:sw.uid,b:best.l.uid,circuit:best.l.circuit,kind:'sw',auto:true}); }
+  });
+  renderSyms(); renderWireInfo();
+  toast(circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません');
+}
+
+function renderWires(){
+  if(!wireg) return;
+  wireg.innerHTML=wires.map(w=>{
+    const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+    if(!a||!b) return '';
+    const col=circuitColor(w.circuit);
+    return `<line class="wirehit" data-uid="${w.uid}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#000" stroke-opacity="0" stroke-width="16" pointer-events="stroke" vector-effect="non-scaling-stroke"/>`+
+           `<line class="wire" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  }).join('');
+  wireg.querySelectorAll('.wirehit').forEach(ln=>{
+    ln.addEventListener('pointerdown',ev=>{ if(!wireMode) return; ev.stopPropagation(); deleteWire(+ln.dataset.uid); });
+  });
+}
+function renderWireInfo(){
+  const host=document.getElementById('wireinfo');
+  if(!wires.length){ host.innerHTML=''; return; }
+  const cal=mmPerPx!=null;
+  const byC={}; wires.forEach(w=>{ byC[w.circuit]=(byC[w.circuit]||0)+wireLenPx(w); });
+  let total=0, rows='';
+  Object.keys(byC).map(Number).sort((a,b)=>a-b).forEach(c=>{
+    const len=byC[c]; total+=len;
+    const val=cal ? (len*mmPerPx/1000).toFixed(1)+' m' : Math.round(len)+' px';
+    rows+=`<tr><td><span class="sw" style="background:${circuitColor(c)}"></span>${c?('回路'+c):'手動/未割当'}</td><td class="n">${val}</td></tr>`;
+  });
+  const tv=cal ? (total*mmPerPx/1000).toFixed(1)+' m' : Math.round(total)+' px';
+  host.innerHTML=`<div class="witit">配線 <b>${wires.length}</b>本 ／ 配線長合計 <b>${tv}</b>${cal?'':'（縮尺未設定）'}</div><table class="tly">${rows}</table>`;
+}
+
+el('btn-wire').onclick=toggleWireMode;
+function toggleWireMode(){ wireMode ? endWireMode() : startWireMode(); }
+function startWireMode(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(calibMode) endCalib();
+  if(layoutMode) endLayout();
+  setTool(null);            // curTool 解除（wireMode はまだ false なので endWireMode は走らない）
+  wireMode=true; wirePendA=null;
+  stage.classList.add('wire');
+  el('btn-wire').classList.add('on');
+  setHint('<b>配線編集：</b>2つのシンボルを順にタップで結線。配線をタップで削除。空白タップで選択解除。');
+  renderSyms();
+}
+function endWireMode(){
+  wireMode=false; wirePendA=null;
+  stage.classList.remove('wire');
+  el('btn-wire').classList.remove('on');
+  renderSyms();
+  setHint('左のシンボルを選ぶ→図面をタップで配置。');
+}
+function handleWireSymTap(uid){
+  if(wirePendA==null){ wirePendA=uid; renderSyms(); toast('接続先のシンボルをタップ'); return; }
+  if(wirePendA===uid){ wirePendA=null; renderSyms(); return; }      // 同じをもう一度でキャンセル
+  if(wires.some(w=>(w.a===wirePendA&&w.b===uid)||(w.a===uid&&w.b===wirePendA))){ toast('その2点は既に結線済みです'); wirePendA=null; renderSyms(); return; }
+  const a=placed.find(p=>p.uid===wirePendA);
+  const circuit=(a&&a.circuit!=null)?a.circuit:0;
+  wires.push({uid:wireSeq++, a:wirePendA, b:uid, circuit, kind:'manual', auto:false});
+  wirePendA=null; renderSyms(); renderWireInfo();
+}
+function deleteWire(uid){ wires=wires.filter(w=>w.uid!==uid); renderWires(); renderWireInfo(); }
+
 // ============ 集計 ============
 function renderTally(){
   document.getElementById('tot').textContent=placed.length;
@@ -866,7 +1032,7 @@ function renderTally(){
 
 // ============ 保存/読込/出力 ============
 function saveJSON(){
-  const st={ver:'alpha-mvp-2', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed, rooms, roomSeq};
+  const st={ver:'alpha-mvp-3', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq};
   const blob=new Blob([JSON.stringify(st)],{type:'application/json'});
   dl(blob,'haichi_'+ts()+'.json'); toast('保存しました');
 }
@@ -876,10 +1042,11 @@ function loadState(file){
     const st=JSON.parse(r.result);
     placed=st.placed||[]; uidSeq=st.uidSeq||(placed.length+1); mmPerPx=st.mmPerPx||null;
     rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
+    wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
     if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); } else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); }
     document.getElementById('uploader').style.display='none';
     document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
-    selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); fitView(); toast('読み込みました');
+    selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); fitView(); toast('読み込みました');
   }catch(e){ toast('ファイルを読めませんでした'); } };
   r.readAsText(file);
 }
@@ -887,6 +1054,18 @@ function exportCSV(){
   const counts={}; placed.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
   let rows=[['分類','名称','数量','単位']];
   SYMBOLS.filter(s=>counts[s.id]).forEach(s=>rows.push([s.cat,s.nm,counts[s.id],'個']));
+  if(wires.length){
+    const cal=mmPerPx!=null, unit=cal?'m':'px';
+    rows.push(['','','','']);
+    rows.push(['配線','回路','配線長',unit]);
+    const byC={}; wires.forEach(w=>{ byC[w.circuit]=(byC[w.circuit]||0)+wireLenPx(w); });
+    let total=0;
+    Object.keys(byC).map(Number).sort((a,b)=>a-b).forEach(c=>{
+      const len=byC[c]; total+=len;
+      rows.push(['配線', c?('回路'+c):'手動', cal?(len*mmPerPx/1000).toFixed(2):Math.round(len), unit]);
+    });
+    rows.push(['配線','合計', cal?(total*mmPerPx/1000).toFixed(2):Math.round(total), unit]);
+  }
   const csv='\uFEFF'+rows.map(r=>r.join(',')).join('\r\n');
   dl(new Blob([csv],{type:'text/csv'}),'hiroi_'+ts()+'.csv'); toast('集計CSVを書き出しました');
 }
@@ -902,7 +1081,7 @@ document.getElementById('btn-open').onclick=()=>document.getElementById('file-ba
 document.getElementById('btn-save').onclick=saveJSON;
 document.getElementById('btn-load').onclick=()=>document.getElementById('file-load').click();
 document.getElementById('btn-csv').onclick=exportCSV;
-document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length)&&!confirm('配置をすべて消去しますか？'))return; placed=[]; rooms=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); };
+document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length)&&!confirm('配置・配線をすべて消去しますか？'))return; placed=[]; rooms=[]; wires=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); };
 document.getElementById('file-base').addEventListener('change',e=>{ if(e.target.files[0])loadFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('file-load').addEventListener('change',e=>{ if(e.target.files[0])loadState(e.target.files[0]); e.target.value=''; });
 document.getElementById('btn-sample').onclick=()=>{ document.getElementById('uploader').style.display='none'; setBaseSize(1600,1100); clearBase(); fitView(); };
