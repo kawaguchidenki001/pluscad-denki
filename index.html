@@ -628,7 +628,7 @@ stage.addEventListener('pointermove',ev=>{
   }
 });
 stage.addEventListener('pointerup',ev=>{
-  if(dragSym){ dragSym=null; if(!dragMoved){ /* タップのみ＝選択維持 */ } renderTally(); }
+  if(dragSym){ dragSym=null; renderTally(); if(dragMoved) renderWireInfo(); }
   if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y); if(moved<4){ selUid=null; renderSyms(); renderSel(); } panStart=null; stage.classList.remove('panning'); }
 });
 function startDragSym(ev,uid){
@@ -955,6 +955,8 @@ function autoWire(){
     let best=null; lights.forEach(l=>{ const d=Math.hypot(sw.x-l.x,sw.y-l.y); if(!best||d<best.d) best={d,l}; });
     if(best){ sw.circuit=best.l.circuit; wires.push({uid:wireSeq++,a:sw.uid,b:best.l.uid,circuit:best.l.circuit,kind:'sw',auto:true}); }
   });
+  // 手動配線は端点の新しい回路に追従（回路別集計・色の不整合を防ぐ）
+  wires.filter(w=>!w.auto).forEach(w=>{ const a=placed.find(p=>p.uid===w.a); w.circuit=(a&&a.circuit!=null)?a.circuit:0; });
   renderSyms(); renderWireInfo();
   toast(circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません');
 }
@@ -1008,6 +1010,7 @@ function endWireMode(){
   setHint('左のシンボルを選ぶ→図面をタップで配置。');
 }
 function handleWireSymTap(uid){
+  if(wirePendA!=null && !placed.find(p=>p.uid===wirePendA)) wirePendA=null; // 欠落した1点目は破棄
   if(wirePendA==null){ wirePendA=uid; renderSyms(); toast('接続先のシンボルをタップ'); return; }
   if(wirePendA===uid){ wirePendA=null; renderSyms(); return; }      // 同じをもう一度でキャンセル
   if(wires.some(w=>(w.a===wirePendA&&w.b===uid)||(w.a===uid&&w.b===wirePendA))){ toast('その2点は既に結線済みです'); wirePendA=null; renderSyms(); return; }
@@ -1037,6 +1040,7 @@ function saveJSON(){
   dl(blob,'haichi_'+ts()+'.json'); toast('保存しました');
 }
 function loadState(file){
+  if(wireMode) endWireMode();
   const r=new FileReader();
   r.onload=()=>{ try{
     const st=JSON.parse(r.result);
