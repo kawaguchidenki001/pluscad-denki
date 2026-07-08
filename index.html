@@ -23,6 +23,8 @@
   header button{background:var(--panel2);color:var(--txt);border:1px solid var(--panel-line);border-radius:7px;padding:7px 12px;font-size:12px;font-weight:700;font-family:var(--jp);cursor:pointer}
   header button:hover{background:var(--panel3);border-color:#46505d}
   header button.acc{background:var(--redline);border-color:var(--redline);color:#fff}
+  header button:disabled{opacity:.4;cursor:default}
+  header button:disabled:hover{background:var(--panel2);border-color:var(--panel-line)}
   header .pdfdim{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--txt-dim)}
   header .pdfdim input{width:88px}
   header .scaleinfo{font-family:var(--mono);font-size:11px;color:var(--txt-dim)}
@@ -69,6 +71,7 @@
 
   /* 選択中シンボルの操作バー */
   #selbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:7;display:none;
+    max-width:calc(100vw - 20px);flex-wrap:wrap;justify-content:center;
     background:rgba(20,22,28,.96);border:1px solid var(--panel-line);border-radius:11px;padding:7px 9px;gap:7px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.4)}
   #selbar.show{display:flex}
   #selbar .lbl{font-size:12px;color:#fff;font-weight:700;font-family:var(--jp);padding:0 6px 0 2px}
@@ -251,11 +254,13 @@
   <header>
     <span class="ttl">電気図 配置・拾い</span>
     <span class="sub" id="appsub">試作 α</span>
+    <button id="btn-undo" title="戻る（元に戻す）" disabled>↶戻る</button>
+    <button id="btn-redo" title="進む（やり直し）" disabled>↷進む</button>
     <button id="btn-open">図面を開く</button>
     <button id="btn-calib">縮尺を設定</button>
     <button id="btn-layout">自動配灯</button>
     <button id="btn-autowire">自動配線</button>
-    <button id="btn-wire">配線編集</button>
+    <button id="btn-wire">手動配線</button>
     <button id="btn-estimate">見積</button>
     <span id="expwrap">
       <button id="btn-export">書き出し ▾</button>
@@ -287,7 +292,7 @@
           <g id="symg"></g>
         </svg>
       </div>
-      <div id="hint"><b>使い方：</b>左のシンボルを選ぶ→図面をタップで配置。配置済みをタップで選択（移動・回転・削除）。</div>
+      <div id="hint"><b>使い方：</b>左のシンボルを選ぶ→図面をタップで配置。配置済みをタップで選択（移動・回転・複製・削除）。上部の「↶戻る」で元に戻せます。</div>
       <div id="zoom">
         <button id="zin">＋</button>
         <button id="zout">－</button>
@@ -305,6 +310,7 @@
         <button id="sel-cpR" class="dir" title="右へコピー">→</button>
         <button id="sel-cpU" class="dir" title="上へコピー">↑</button>
         <button id="sel-cpD" class="dir" title="下へコピー">↓</button>
+        <button id="sel-dup" title="複製（同じ記号をもう1つ置く）" style="width:auto;padding:0 10px">複製</button>
         <button id="sel-assign" title="点灯照明を選択" style="display:none;width:auto;padding:0 10px">点灯照明</button>
         <div class="sep"></div>
         <button id="sel-del" class="del" title="削除">🗑</button>
@@ -717,6 +723,7 @@ async function loadFile(file){
   currentProjId=null; currentProjName='';
   document.getElementById('uploader').style.display='none';
   fitView();
+  resetHistory();
 }
 function loadImage(file){
   return new Promise(res=>{
@@ -745,7 +752,7 @@ function pushSymbol(type,x,y,meta){
   placed.push(p);
   return p.uid;
 }
-function addSymbol(type,x,y){ pushSymbol(type,x,y); renderSyms(); renderTally(); }
+function addSymbol(type,x,y){ pushSymbol(type,x,y); renderSyms(); renderTally(); pushHistory(); }
 function renderSyms(){
   const SZ=40; // シンボル基準サイズ(px, world)
   const asw=(assignMode&&assignSwUid!=null)?placed.find(x=>x.uid===assignSwUid):null;
@@ -786,15 +793,52 @@ function renderSel(){
 }
 document.getElementById('sel-rotL').onclick=()=>rotateSel(-15);
 document.getElementById('sel-rotR').onclick=()=>rotateSel(15);
-document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; if(assignMode) endAssign(); const uid=selUid; placed=placed.filter(x=>x.uid!==uid); wires=wires.filter(w=>w.a!==uid&&w.b!==uid); placed.forEach(x=>{ if(x.controls) x.controls=x.controls.filter(u=>u!==uid); }); selUid=null; renderSyms(); renderSel(); renderTally(); renderWireInfo(); };
-function rotateSel(d){ if(assignMode)return; const p=placed.find(x=>x.uid===selUid); if(!p)return; p.rot=(p.rot+d)%360; renderSyms(); }
+document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; if(assignMode) endAssign(); const uid=selUid; placed=placed.filter(x=>x.uid!==uid); wires=wires.filter(w=>w.a!==uid&&w.b!==uid); placed.forEach(x=>{ if(x.controls) x.controls=x.controls.filter(u=>u!==uid); }); selUid=null; renderSyms(); renderSel(); renderTally(); renderWireInfo(); pushHistory(); };
+function rotateSel(d){ if(assignMode)return; const p=placed.find(x=>x.uid===selUid); if(!p)return; p.rot=(p.rot+d)%360; renderSyms(); pushHistory(); }
 // 種別の色変更（同種の全シンボルに反映）
 el('sel-color').addEventListener('input',e=>{ const p=placed.find(x=>x.uid===selUid); if(!p)return; typeColors[p.type]=e.target.value; refreshColors(p.type); });
+el('sel-color').addEventListener('change',()=>{ if(placed.find(x=>x.uid===selUid)) pushHistory(); });  // 確定時に1回だけ履歴へ
 function refreshColors(type){
   renderSyms(); renderTally(); paintLayoutLayer();
   const btn=document.querySelector(`.palbtn[data-id="${type}"] svg`); if(btn) btn.style.color=colorOf(type);
 }
 function refreshAllPaletteColors(){ document.querySelectorAll('.palbtn').forEach(b=>{ const svg=b.querySelector('svg'); if(svg) svg.style.color=colorOf(b.dataset.id); }); }
+
+// ============ 履歴（戻る/進む Undo/Redo） ============
+let history=[], histIdx=-1; const HIST_MAX=60;
+function snapDraw(){ return JSON.stringify({placed,rooms,wires,uidSeq,roomSeq,wireSeq,typeColors}); }
+function applyDrawSnap(s){
+  if(assignMode) endAssign();
+  wirePendA=null;
+  const st=JSON.parse(s);
+  placed=st.placed||[]; rooms=st.rooms||[]; wires=st.wires||[];
+  uidSeq=st.uidSeq||(placed.reduce((m,p)=>Math.max(m,p.uid||0),0)+1);
+  roomSeq=st.roomSeq||1; wireSeq=st.wireSeq||1; typeColors=st.typeColors||{};
+  selUid=null;
+  refreshAllPaletteColors(); renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo();
+}
+function pushHistory(){
+  const s=snapDraw();
+  if(histIdx>=0 && history[histIdx]===s){ updateUndoRedo(); return; } // 変化なしは積まない
+  history=history.slice(0,histIdx+1);                                // 分岐したredoは破棄
+  history.push(s); if(history.length>HIST_MAX) history.shift();
+  histIdx=history.length-1; updateUndoRedo();
+}
+function resetHistory(){ history=[snapDraw()]; histIdx=0; updateUndoRedo(); }
+function undo(){ if(histIdx>0){ histIdx--; applyDrawSnap(history[histIdx]); updateUndoRedo(); } }
+function redo(){ if(histIdx<history.length-1){ histIdx++; applyDrawSnap(history[histIdx]); updateUndoRedo(); } }
+function updateUndoRedo(){ const u=el('btn-undo'),r=el('btn-redo'); if(u) u.disabled=(histIdx<=0); if(r) r.disabled=(histIdx>=history.length-1); }
+el('btn-undo').onclick=undo; el('btn-redo').onclick=redo;
+document.addEventListener('keydown',ev=>{ const t=ev.target; if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable)) return; if((ev.ctrlKey||ev.metaKey)&&!ev.altKey){ const k=ev.key.toLowerCase(); if(k==='z'&&!ev.shiftKey){ ev.preventDefault(); undo(); } else if(k==='y'||(k==='z'&&ev.shiftKey)){ ev.preventDefault(); redo(); } } });
+
+// 選択シンボルの複製（同種を少しずらして1個。方向コピーとは別に、まず1個だけ増やしたい時用）
+function duplicateSel(){
+  if(assignMode) return;
+  const p=placed.find(x=>x.uid===selUid); if(!p) return;
+  const uid=pushSymbol(p.type, p.x+28, p.y+28, {rot:p.rot});   // controlsは引き継がない
+  selUid=uid; renderSyms(); renderSel(); renderTally(); pushHistory();
+}
+el('sel-dup').onclick=duplicateSel;
 // コピー間隔
 el('sel-step').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(isFinite(v)&&v>0) copyStep=v; });
 // 方向コピー（較正時mm→px換算、未較正はpx）
@@ -805,17 +849,17 @@ function copyDir(dx,dy){
   const meta={rot:p.rot};                    // controlsは引き継がない（複製スイッチの二重結線を防止＝未割当で最寄り結線）
   const nx=p.x+dx*stepPx, ny=p.y+dy*stepPx;
   const uid=pushSymbol(p.type,nx,ny,meta);
-  selUid=uid; renderSyms(); renderSel(); renderTally();
+  selUid=uid; renderSyms(); renderSel(); renderTally(); pushHistory();
 }
 el('sel-cpL').onclick=()=>copyDir(-1,0);
 el('sel-cpR').onclick=()=>copyDir(1,0);
 el('sel-cpU').onclick=()=>copyDir(0,-1);
 el('sel-cpD').onclick=()=>copyDir(0,1);
 // スイッチ→点灯照明の割当モード
-el('sel-assign').onclick=()=>{ assignMode?endAssign():startAssign(); };
+el('sel-assign').onclick=()=>{ if(assignMode){ endAssign(); pushHistory(); } else startAssign(); };  // 確定時に割当変更を履歴へ（変化なしはdedupe）
 function startAssign(){
   const p=placed.find(x=>x.uid===selUid); if(!p||symById(p.type).cat!=='スイッチ')return;
-  if(!p.controls) p.controls=[];
+  // controls は toggleAssign で実際に割り当てた時に生成（空割当セッションで無意味な履歴が積まれるのを防ぐ）
   assignMode=true; assignSwUid=p.uid;
   el('sel-assign').classList.add('on');
   stage.classList.add('assign');
@@ -844,6 +888,9 @@ function toggleAssign(uid){
 let dragSym=null, dragMoved=false, panStart=null;
 
 stage.addEventListener('pointerdown',ev=>{
+  // オーバーレイUI（ズーム/選択バー/ヒント）上のタップは stage が横取りしない
+  // （setPointerCapture でタッチ端末のボタンclickが発火しなくなる不具合の対策）
+  if(ev.target.closest('#zoom,#selbar')) return;
   if(calibMode){ handleCalibClick(ev); return; }
   if(layoutMode){ handleLayoutClick(ev); return; }
   // 割当中：照明タップはsym側。空白はパン可（下のpointerupで選択解除しない）。curToolはnullなので配置には落ちない。
@@ -869,7 +916,7 @@ stage.addEventListener('pointermove',ev=>{
   }
 });
 stage.addEventListener('pointerup',ev=>{
-  if(dragSym){ dragSym=null; renderTally(); if(dragMoved) renderWireInfo(); }
+  if(dragSym){ dragSym=null; renderTally(); if(dragMoved){ renderWireInfo(); pushHistory(); } }
   if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y); if(moved<4 && !assignMode){ selUid=null; renderSyms(); renderSel(); } panStart=null; stage.classList.remove('panning'); }
 });
 function startDragSym(ev,uid){
@@ -1095,6 +1142,7 @@ function commitLayout(){
   rooms.push(room);
   renderSyms(); renderTally();
   endLayout();
+  pushHistory();
   toast(`${total}台を配置しました`);
 }
 function placeRoomLights(room){
@@ -1213,7 +1261,7 @@ function autoWire(){
   });
   // 手動配線は端点の新しい回路に追従（回路別集計・色の不整合を防ぐ。両端点から決定的に導出）
   wires.filter(w=>!w.auto).forEach(w=>{ w.circuit=wireCircuitOf(w.a,w.b); });
-  renderSyms(); renderWireInfo();
+  renderSyms(); renderWireInfo(); pushHistory();
   toast(circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません');
 }
 
@@ -1256,7 +1304,8 @@ function startWireMode(){
   wireMode=true; wirePendA=null;
   stage.classList.add('wire');
   el('btn-wire').classList.add('on');
-  setHint('<b>配線編集：</b>2つのシンボルを順にタップで結線。配線をタップで削除。空白タップで選択解除。');
+  setHint('<b>手動配線：</b>結びたい2つのシンボルを順にタップ＝1本の配線。配線をタップ＝削除。空白タップで1点目を解除。もう一度「手動配線」で終了。');
+  toast('手動配線：2つのシンボルを順にタップ');
   renderSyms();
 }
 function endWireMode(){
@@ -1272,9 +1321,9 @@ function handleWireSymTap(uid){
   if(wirePendA===uid){ wirePendA=null; renderSyms(); return; }      // 同じをもう一度でキャンセル
   if(wires.some(w=>(w.a===wirePendA&&w.b===uid)||(w.a===uid&&w.b===wirePendA))){ toast('その2点は既に結線済みです'); wirePendA=null; renderSyms(); return; }
   wires.push({uid:wireSeq++, a:wirePendA, b:uid, circuit:wireCircuitOf(wirePendA,uid), kind:'manual', auto:false});
-  wirePendA=null; renderSyms(); renderWireInfo();
+  wirePendA=null; renderSyms(); renderWireInfo(); pushHistory();
 }
-function deleteWire(uid){ wires=wires.filter(w=>w.uid!==uid); renderWires(); renderWireInfo(); }
+function deleteWire(uid){ wires=wires.filter(w=>w.uid!==uid); renderWires(); renderWireInfo(); pushHistory(); }
 
 // ============ 見積（配置数＋配線長 → 品目マッピング → 岐阜県単価マスタ照合 / Step D） ============
 // 記号id → マスタ検索(cats/keyword)。specは候補から選択。
@@ -1939,6 +1988,7 @@ function applyState(st){
   document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
   refreshAllPaletteColors();
   selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); fitView();
+  resetHistory();
 }
 // ファイル書き出し（バックアップ／別端末移動用）
 function saveJSONFile(){ const blob=new Blob([JSON.stringify(buildState())],{type:'application/json'}); dl(blob, (currentProjName?currentProjName.replace(/[\\/:*?"<>|]/g,'_'):'haichi')+'_'+ts()+'.json'); toast('ファイルに書き出しました（端末のダウンロード先）'); }
@@ -2013,7 +2063,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.6', APP_DATE='2026-07-08';
+const APP_VERSION='0.7', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
@@ -2023,10 +2073,10 @@ document.getElementById('btn-open').onclick=()=>document.getElementById('file-ba
 document.getElementById('btn-save').onclick=saveProject;                 // ブラウザ内に保存
 document.getElementById('btn-load').onclick=openProjModal;               // 保存一覧を開く
 document.getElementById('btn-csv').onclick=exportCSV;
-document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length)&&!confirm('配置・配線をすべて消去しますか？'))return; if(assignMode) endAssign(); placed=[]; rooms=[]; wires=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); };
+document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length)&&!confirm('配置・配線をすべて消去しますか？'))return; if(assignMode) endAssign(); placed=[]; rooms=[]; wires=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); pushHistory(); };
 document.getElementById('file-base').addEventListener('change',e=>{ if(e.target.files[0])loadFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('file-load').addEventListener('change',e=>{ if(e.target.files[0])loadState(e.target.files[0]); e.target.value=''; });
-document.getElementById('btn-sample').onclick=()=>{ document.getElementById('uploader').style.display='none'; currentProjId=null; currentProjName=''; setBaseSize(1600,1100); clearBase(); fitView(); };
+document.getElementById('btn-sample').onclick=()=>{ document.getElementById('uploader').style.display='none'; currentProjId=null; currentProjName=''; setBaseSize(1600,1100); clearBase(); fitView(); resetHistory(); };
 document.getElementById('btn-openfile').onclick=()=>document.getElementById('file-load').click();
 // 保存管理モーダル
 el('proj-close').onclick=closeProjModal;
@@ -2043,7 +2093,7 @@ stage.addEventListener('dragover',e=>e.preventDefault());
 stage.addEventListener('drop',e=>{ e.preventDefault(); const f=e.dataTransfer.files[0]; if(f)loadFile(f); });
 
 // 初期化
-setBaseSize(1600,1100); renderTally(); refreshProjLists();
+setBaseSize(1600,1100); renderTally(); refreshProjLists(); resetHistory();
 window.addEventListener('resize',()=>{ if(document.getElementById('uploader').style.display==='none')applyView(); });
 </script>
 </body>
