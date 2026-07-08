@@ -859,7 +859,7 @@ el('sel-cpD').onclick=()=>copyDir(0,1);
 el('sel-assign').onclick=()=>{ if(assignMode){ endAssign(); pushHistory(); } else startAssign(); };  // 確定時に割当変更を履歴へ（変化なしはdedupe）
 function startAssign(){
   const p=placed.find(x=>x.uid===selUid); if(!p||symById(p.type).cat!=='スイッチ')return;
-  if(!p.controls) p.controls=[];
+  // controls は toggleAssign で実際に割り当てた時に生成（空割当セッションで無意味な履歴が積まれるのを防ぐ）
   assignMode=true; assignSwUid=p.uid;
   el('sel-assign').classList.add('on');
   stage.classList.add('assign');
