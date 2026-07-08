@@ -321,6 +321,7 @@
     <button id="btn-msel">範囲選択</button>
     <button id="btn-text">文字</button>
     <button id="btn-snap" title="グリッドに吸着（配置・移動・整列がきれいに揃う）">スナップ</button>
+    <button id="btn-esnap" title="読取点スナップ：DXF/JWW下敷きの線の端点・角・中心や配置済み記号に吸着（正確なトレース向け）">読取点</button>
     <span class="pdfdim" id="gridwrap" style="display:none"><span>間隔</span><input id="grid-mm" type="number" min="1" step="5" value="455" style="width:56px;height:24px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;border-radius:6px;text-align:right;font-family:var(--mono);font-size:12px;padding:0 4px"><span id="grid-unit">mm</span></span>
     <button id="btn-estimate">見積</button>
     <span id="expwrap">
@@ -357,6 +358,7 @@
           <g id="symg"></g>
           <g id="textg"></g>
           <g id="mselg"></g>
+          <g id="snapg" pointer-events="none"></g>
         </svg>
       </div>
       <div id="hint"><b>使い方：</b>左のシンボルを選ぶ→図面をタップで配置。配置済みをタップで選択（移動・回転・複製・削除）。上部の「↶戻る」で元に戻せます。</div>
@@ -785,6 +787,8 @@ function normalizeLayers(saved){
 }
 let snapOn = false;        // グリッド吸着
 let gridMm = 455;          // グリッド間隔（較正時mm／未較正px。既定=尺モジュール半間の1/2）
+let esnapOn = false;       // 読取点スナップ（JW-CAD相当。ベクター下敷きの端点/頂点/中心・配置記号中心へ吸着）
+let vecSnapPts = [];       // ベクター下敷きの読取点（world座標）
 
 const stage=document.getElementById('stage');
 const world=document.getElementById('world');
@@ -797,6 +801,7 @@ const textg=document.getElementById('textg');
 const gridg=document.getElementById('gridg');
 const baseg=document.getElementById('baseg');
 const mselg=document.getElementById('mselg');
+const snapg=document.getElementById('snapg');
 const baseimg=document.getElementById('baseimg');
 const baseEl=document.getElementById('base');
 
@@ -892,7 +897,24 @@ function toWorld(clientX,clientY){
 
 // ============ グリッド吸着（スナップ） ============
 function gridPx(){ return (mmPerPx!=null)?(gridMm/mmPerPx):gridMm; }
-function snapPt(x,y){ if(!snapOn) return {x,y}; const g=gridPx(); if(!(g>0.5)) return {x,y}; return {x:Math.round(x/g)*g, y:Math.round(y/g)*g}; }
+// 読取点スナップ：ベクター下敷きの端点/頂点/中心・配置記号中心から、半径内の最寄り点を返す（なければnull）
+function esnapNearest(x,y){
+  const r=14/Math.max(0.0001,scale), r2=r*r; let best=null, bd=r2;
+  for(const p of placed){ if(!layerVisible(p.layer)) continue; if(dragSym&&p.uid===dragSym.uid) continue;   // 自分自身には吸着しない
+    const dx=p.x-x, dy=p.y-y, d=dx*dx+dy*dy; if(d<bd){ bd=d; best={x:p.x,y:p.y}; } }
+  if(layerVisible('base')) for(let i=0;i<vecSnapPts.length;i++){ const s=vecSnapPts[i], dx=s.x-x, dy=s.y-y, d=dx*dx+dy*dy; if(d<bd){ bd=d; best=s; } }
+  return best;
+}
+function showSnapMark(x,y){ if(!snapg) return; const R=6;
+  snapg.innerHTML=`<g transform="translate(${x},${y})" stroke="#26C6DA" stroke-width="1.6" fill="none" vector-effect="non-scaling-stroke">`
+    +`<rect x="${-R}" y="${-R}" width="${R*2}" height="${R*2}"/><line x1="${-R-3}" y1="0" x2="${R+3}" y2="0"/><line x1="0" y1="${-R-3}" x2="0" y2="${R+3}"/></g>`;
+}
+function hideSnapMark(){ if(snapg) snapg.innerHTML=''; }
+function gridSnapPt(x,y){ if(!snapOn) return {x,y}; const g=gridPx(); if(!(g>0.5)) return {x,y}; return {x:Math.round(x/g)*g, y:Math.round(y/g)*g}; }
+function snapPt(x,y){
+  if(esnapOn){ const s=esnapNearest(x,y); if(s){ showSnapMark(s.x,s.y); return {x:s.x,y:s.y}; } hideSnapMark(); }
+  return gridSnapPt(x,y);   // 読取点が無ければ従来のグリッド吸着
+}
 function renderGrid(){
   if(!gridg) return;
   if(!snapOn){ gridg.innerHTML=''; return; }
@@ -905,6 +927,7 @@ function renderGrid(){
 }
 function updateSnapUI(){
   el('btn-snap').classList.toggle('on',snapOn);
+  const be=el('btn-esnap'); if(be) be.classList.toggle('on',esnapOn);
   el('gridwrap').style.display=snapOn?'':'none';
   el('grid-mm').value=gridMm;
   el('grid-unit').textContent=(mmPerPx!=null)?'mm':'px';
@@ -916,11 +939,15 @@ el('btn-snap').onclick=()=>{
   updateSnapUI();
   toast(snapOn?`スナップON（${gridMm}${mmPerPx!=null?'mm':'px'}間隔に吸着）`:'スナップOFF');
 };
+el('btn-esnap').onclick=()=>{
+  esnapOn=!esnapOn; if(!esnapOn) hideSnapMark(); updateSnapUI(); scheduleAutosave();
+  toast(esnapOn?(vecSnapPts.length||placed.length?'読取点スナップON（端点・角・中心・記号に吸着）':'読取点スナップON（DXF/JWW下敷きか配置済み記号があると吸着します）'):'読取点スナップOFF');
+};
 el('grid-mm').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(isFinite(v)&&v>0){ gridMm=v; renderGrid(); } });
 
 // ============ 下敷き設定 ============
 function setBaseSize(w,h){ baseW=w; baseH=h; baseEl.style.width=w+'px'; baseEl.style.height=h+'px'; overlay.setAttribute('width',w); overlay.setAttribute('height',h); overlay.setAttribute('viewBox',`0 0 ${w} ${h}`); renderGrid(); }
-function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); applyBgInvert(); applyBaseLayer(); baseToken++; }
+function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; vecSnapPts=[]; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); applyBgInvert(); applyBaseLayer(); baseToken++; }
 function applyBaseOpacity(){ baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
 // 背景反転：下敷き画像はinvert(白→黒)、紙(#base)背景も暗色に。ベクター下敷きは暗背景に映える色へ。配置シンボルは反転しない。
 function applyBgInvert(){
@@ -993,7 +1020,7 @@ if(el('msel-layer')) el('msel-layer').onchange=e=>{ const id=e.target.value; if(
   const L=findLayer(id); selSet.forEach(u=>{ const p=placed.find(x=>x.uid===u); if(p)p.layer=id; }); e.target.value='';
   renderSyms(); renderLayers(); pushHistory(); toast(selSet.length+'個を「'+(L?L.name:'')+'」へ移動'); };
 el('base-op').addEventListener('input',e=>{ baseOpacity=(+e.target.value||100)/100; baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; });
-function clearBase(){ baseSrc=null; baseVec=null; baseg.innerHTML=''; baseimg.removeAttribute('src'); setBaseSize(1200,850); baseToken++; pdfDocCur=null; if(el('btn-pdfpage')) updatePdfPageBtn(); }
+function clearBase(){ baseSrc=null; baseVec=null; vecSnapPts=[]; baseg.innerHTML=''; baseimg.removeAttribute('src'); setBaseSize(1200,850); baseToken++; pdfDocCur=null; if(el('btn-pdfpage')) updatePdfPageBtn(); }
 function applyBaseVecOpacity(){ baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
 
 // ── DXF/JWW をベクター下敷きに（実mm座標＝較正不要） ──
@@ -1085,15 +1112,19 @@ function setBaseVec(dxfText){
   const W=Math.max(1,(bb.maxx-bb.minx))+M*2, H=Math.max(1,(bb.maxy-bb.miny))+M*2;
   const SX=x=>(x-bb.minx)+M, SY=y=>(bb.maxy-y)+M;  // X平行移動＋Y反転（DXFはY上向き）
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // 読取点スナップ用の点を収集（world座標。整数丸めで角の重複を1点に集約、上限で頭打ち）
+  const snapSet=new Set(), snapArr=[];
+  const addSnap=(sx,sy)=>{ if(snapArr.length>=40000) return; const kx=Math.round(sx), ky=Math.round(sy), k=kx+','+ky; if(!snapSet.has(k)){ snapSet.add(k); snapArr.push({x:kx,y:ky}); } };
   let svg='';
   for(const p of prims){
-    if(p.k==='line') svg+=`<line x1="${SX(p.a[0])}" y1="${SY(p.a[1])}" x2="${SX(p.b[0])}" y2="${SY(p.b[1])}"/>`;
-    else if(p.k==='circle') svg+=`<circle cx="${SX(p.c[0])}" cy="${SY(p.c[1])}" r="${p.r}" fill="none"/>`;
+    if(p.k==='line'){ svg+=`<line x1="${SX(p.a[0])}" y1="${SY(p.a[1])}" x2="${SX(p.b[0])}" y2="${SY(p.b[1])}"/>`; addSnap(SX(p.a[0]),SY(p.a[1])); addSnap(SX(p.b[0]),SY(p.b[1])); }
+    else if(p.k==='circle'){ svg+=`<circle cx="${SX(p.c[0])}" cy="${SY(p.c[1])}" r="${p.r}" fill="none"/>`; addSnap(SX(p.c[0]),SY(p.c[1])); }
     else if(p.k==='arc'){ const x0=SX(p.p0[0]), y0=SY(p.p0[1]), x1=SX(p.p1[0]), y1=SY(p.p1[1]);
-      svg+=`<path d="M ${x0} ${y0} A ${p.r} ${p.r} 0 ${p.large} ${p.sweep} ${x1} ${y1}" fill="none"/>`; }
-    else if(p.k==='poly'){ const d='M '+p.pts.map(q=>`${SX(q[0])} ${SY(q[1])}`).join(' L ')+(p.closed?' Z':''); svg+=`<path d="${d}" fill="none"/>`; }
+      svg+=`<path d="M ${x0} ${y0} A ${p.r} ${p.r} 0 ${p.large} ${p.sweep} ${x1} ${y1}" fill="none"/>`; addSnap(x0,y0); addSnap(x1,y1); }
+    else if(p.k==='poly'){ const d='M '+p.pts.map(q=>`${SX(q[0])} ${SY(q[1])}`).join(' L ')+(p.closed?' Z':''); svg+=`<path d="${d}" fill="none"/>`; p.pts.forEach(q=>addSnap(SX(q[0]),SY(q[1]))); }
     else if(p.k==='text'){ svg+=`<text x="${SX(p.c[0])}" y="${SY(p.c[1])}" font-size="${p.h}" transform="rotate(${-p.rot} ${SX(p.c[0])} ${SY(p.c[1])})" fill="currentColor" stroke="none">${esc(p.text)}</text>`; }
   }
+  vecSnapPts=snapArr;
   baseSrc=null; baseimg.removeAttribute('src'); baseVec={kind:'dxf', text:dxfText};
   // 色は #baseg 要素の color で与える（画面=淡灰青／印刷=濃色 を innerHTML 側は currentColor で継承）
   baseg.innerHTML=`<g fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke">${svg}</g>`;
@@ -1490,8 +1521,8 @@ el('msel-del').onclick=()=>{
 el('msel-x').onclick=()=>{ mselClear(); renderSyms(); };
 function mselAlign(kind){
   const items=mselItems(); if(items.length<2){ toast('2個以上選択してください'); return; }
-  if(kind==='alH'){ const y=snapPt(0, items.reduce((s,p)=>s+p.y,0)/items.length).y; items.forEach(p=>p.y=Math.round(y)); }
-  else if(kind==='alV'){ const x=snapPt(items.reduce((s,p)=>s+p.x,0)/items.length, 0).x; items.forEach(p=>p.x=Math.round(x)); }
+  if(kind==='alH'){ const y=gridSnapPt(0, items.reduce((s,p)=>s+p.y,0)/items.length).y; items.forEach(p=>p.y=Math.round(y)); }   // 整列は格子のみ（読取点で軸へ吸着しない）
+  else if(kind==='alV'){ const x=gridSnapPt(items.reduce((s,p)=>s+p.x,0)/items.length, 0).x; items.forEach(p=>p.x=Math.round(x)); }
   else if(kind==='dsH'){ const s=[...items].sort((a,b)=>a.x-b.x); const x0=s[0].x, x1=s[s.length-1].x; s.forEach((p,i)=>p.x=Math.round(x0+(x1-x0)*i/(s.length-1))); }
   else if(kind==='dsV'){ const s=[...items].sort((a,b)=>a.y-b.y); const y0=s[0].y, y1=s[s.length-1].y; s.forEach((p,i)=>p.y=Math.round(y0+(y1-y0)*i/(s.length-1))); }
   renderSyms(); renderWireInfo(); pushHistory();
@@ -1535,6 +1566,9 @@ stage.addEventListener('pointerdown',ev=>{
   stage.setPointerCapture(ev.pointerId);
 });
 stage.addEventListener('pointermove',ev=>{
+  if(curTool && esnapOn && !dragSym && !groupDrag && !panStart && !mselStart && !textDrag){   // 配置前プレビュー：読取点マーカー
+    const w=toWorld(ev.clientX,ev.clientY); snapPt(w.x,w.y);
+  }
   if(layoutMode){ if(layoutPts.length===1 && !layoutDraft) drawRubber(toWorld(ev.clientX,ev.clientY)); return; }
   if(mselStart){ mselRubber(mselStart,toWorld(ev.clientX,ev.clientY)); return; }
   if(textDrag){
@@ -1560,6 +1594,7 @@ stage.addEventListener('pointermove',ev=>{
   }
 });
 stage.addEventListener('pointerup',ev=>{
+  hideSnapMark();   // 操作終了で読取点マーカーを消す（早期returnする分岐＝文字ドラッグ等でも確実に消える）
   if(mselStart){ const a=mselStart; mselStart=null; mselFinish(a,toWorld(ev.clientX,ev.clientY)); return; }
   if(textDrag){ if(textDrag.moved){ renderTexts(); pushHistory(); } textDrag=null; return; }
   if(groupDrag){ if(groupDrag.moved){ renderTally(); renderWireInfo(); pushHistory(); } groupDrag=null; return; }
@@ -2850,7 +2885,7 @@ function renderTally(){
 // ============ 保存/読込/出力 ============
 // 現在の全状態を1オブジェクトに（ファイル/ブラウザ内保存 共通）
 function buildState(){
-  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels, bgInvert, layers};
+  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels, bgInvert, layers, esnapOn};
 }
 // 状態オブジェクトを適用（ファイル読込・ブラウザ内保存の復元 共通）
 function applyState(st){
@@ -2864,7 +2899,7 @@ function applyState(st){
   rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
   wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
   texts=st.texts||[]; textSeq=st.textSeq||(texts.reduce((m,t)=>Math.max(m,t.uid||0),0)+1);
-  snapOn=!!st.snapOn; gridMm=st.gridMm||455; wireLabels=!!st.wireLabels; bgInvert=!!st.bgInvert;
+  snapOn=!!st.snapOn; gridMm=st.gridMm||455; wireLabels=!!st.wireLabels; bgInvert=!!st.bgInvert; esnapOn=!!st.esnapOn;
   estimate=st.estimate||defaultEstimate();
   if(estimate.wire && !estimate.wire.circuitSpec) estimate.wire.circuitSpec={};   // 旧保存の後方互換
   typeColors=st.typeColors||{}; baseOpacity=(st.baseOpacity!=null?st.baseOpacity:1); copyStep=st.copyStep||1000;
@@ -2992,7 +3027,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.16', APP_DATE='2026-07-08';
+const APP_VERSION='0.17', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
