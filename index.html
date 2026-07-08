@@ -314,6 +314,7 @@
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
     <span class="spacer"></span>
     <span class="pdfdim" title="下敷き(PDF/画像)の濃さ"><span>下敷き濃さ</span><input id="base-op" type="range" min="20" max="100" value="100"></span>
+    <button id="btn-invert" title="背景の白黒を反転（暗い背景で見やすく）">背景反転</button>
     <button id="btn-save">保存</button>
     <button id="btn-load">読込</button>
   </header>
@@ -711,6 +712,7 @@ let wireLabels = false;    // 配線の線種傍記を図に表示
 // 追加機能（色/コピー/割当/下敷き濃さ）
 let typeColors = {};       // {記号id: 上書き色}（種別ごとの色変更）
 let baseOpacity = 1;       // 下敷き(PDF/画像)の不透明度 0.2〜1
+let bgInvert = false;      // 背景反転（白図面を黒背景に）
 let copyStep = 1000;       // コピー間隔（較正時mm / 未較正px）
 let assignMode = false;    // スイッチ→点灯照明の割当モード
 let assignSwUid = null;    // 割当対象スイッチ
@@ -861,8 +863,16 @@ el('grid-mm').addEventListener('input',e=>{ const v=parseFloat(e.target.value); 
 
 // ============ 下敷き設定 ============
 function setBaseSize(w,h){ baseW=w; baseH=h; baseEl.style.width=w+'px'; baseEl.style.height=h+'px'; overlay.setAttribute('width',w); overlay.setAttribute('height',h); overlay.setAttribute('viewBox',`0 0 ${w} ${h}`); renderGrid(); }
-function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); baseToken++; }
+function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); applyBgInvert(); baseToken++; }
 function applyBaseOpacity(){ baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
+// 背景反転：下敷き画像はinvert(白→黒)、紙(#base)背景も暗色に。ベクター下敷きは暗背景に映える色へ。配置シンボルは反転しない。
+function applyBgInvert(){
+  baseimg.style.filter = bgInvert?'invert(1) hue-rotate(180deg)':'';
+  baseEl.style.background = bgInvert?'#0e1013':'var(--paper)';
+  baseg.style.color = bgInvert?'#8fa4bf':'#7f8a9a';   // ベクター下敷きの線色（暗背景で視認）
+  const b=el('btn-invert'); if(b) b.classList.toggle('on',bgInvert);
+}
+el('btn-invert').onclick=()=>{ bgInvert=!bgInvert; applyBgInvert(); scheduleAutosave(); toast(bgInvert?'背景を反転しました（白→黒）':'背景を戻しました'); };
 el('base-op').addEventListener('input',e=>{ baseOpacity=(+e.target.value||100)/100; baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; });
 function clearBase(){ baseSrc=null; baseVec=null; baseg.innerHTML=''; baseimg.removeAttribute('src'); setBaseSize(1200,850); baseToken++; pdfDocCur=null; if(el('btn-pdfpage')) updatePdfPageBtn(); }
 function applyBaseVecOpacity(){ baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
@@ -949,13 +959,12 @@ function setBaseVec(dxfText){
   }
   baseSrc=null; baseimg.removeAttribute('src'); baseVec={kind:'dxf', text:dxfText};
   // 色は #baseg 要素の color で与える（画面=淡灰青／印刷=濃色 を innerHTML 側は currentColor で継承）
-  baseg.style.color='#7f8a9a';
   baseg.innerHTML=`<g fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke">${svg}</g>`;
   setBaseSize(Math.ceil(W),Math.ceil(H));
   mmPerPx=1;                                       // DXF/JWWは実mm→較正不要
   const unitNote=(U!==1)?`（${U===25.4?'inch':U===304.8?'ft':U===1000?'m':U===10?'cm':'単位'}→mm換算）`:'';
   document.getElementById('scaleinfo').innerHTML=`縮尺：<b>1px = 1.00mm</b>（DXF/JWW実寸${unitNote}）`;
-  applyBaseVecOpacity();
+  applyBaseVecOpacity(); applyBgInvert();          // ベクター下敷きの線色＝背景反転状態に追従
   baseToken++;
   if(capped) toast(`図形が多いため一部のみ表示しています（${MAXP}要素上限）`);
   return prims.length;
@@ -985,7 +994,7 @@ function loadImage(file){
 // DXF/JWW を下敷きに（DXFはShift-JIS/UTF-8テキスト、JWWはバイナリ→jwwToDxfでDXF化）
 async function loadCAD(file, name){
   try{
-    let dxfText;
+    let dxfText, jwwSkipped=0;
     if(name.endsWith('.dxf')){
       const buf=new Uint8Array(await file.arrayBuffer());
       dxfText=window.DxfParser.decodeBytes(buf);      // $DWGCODEPAGE準拠でSJIS/UTF-8判定
@@ -994,9 +1003,11 @@ async function loadCAD(file, name){
       const buf=new Uint8Array(await file.arrayBuffer());
       const r=await window.JwwToDxf.jwwToDxf(buf);
       dxfText=new TextDecoder('shift_jis').decode(r.bytes);
+      jwwSkipped=(r.info&&r.info.skipped)?r.info.skipped.length:0;   // 未対応要素で途中打ち切りの目印
     }
     const n=setBaseVec(dxfText);
-    if(!n){ toast('図形が見つかりませんでした（対応外のCADかもしれません）'); }
+    if(!n){ toast(name.endsWith('.jww')?'このJWWは未対応の要素が多く読み込めませんでした（PDF/DXFでの取込をお試しください）':'図形が見つかりませんでした（対応外のCADかもしれません）'); }
+    else if(jwwSkipped){ toast(`JWWを部分的に取り込みました（${n}要素／未対応要素があり一部のみ）`); }
     else toast(`${name.endsWith('.jww')?'JWW':'DXF'}を下敷きにしました（${n}要素・較正不要）`);
     return true;
   }catch(err){ console.error(err); toast('CADファイルを読めませんでした'); return false; }
@@ -2687,7 +2698,7 @@ function renderTally(){
 // ============ 保存/読込/出力 ============
 // 現在の全状態を1オブジェクトに（ファイル/ブラウザ内保存 共通）
 function buildState(){
-  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels};
+  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels, bgInvert};
 }
 // 状態オブジェクトを適用（ファイル読込・ブラウザ内保存の復元 共通）
 function applyState(st){
@@ -2699,7 +2710,7 @@ function applyState(st){
   rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
   wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
   texts=st.texts||[]; textSeq=st.textSeq||(texts.reduce((m,t)=>Math.max(m,t.uid||0),0)+1);
-  snapOn=!!st.snapOn; gridMm=st.gridMm||455; wireLabels=!!st.wireLabels;
+  snapOn=!!st.snapOn; gridMm=st.gridMm||455; wireLabels=!!st.wireLabels; bgInvert=!!st.bgInvert;
   estimate=st.estimate||defaultEstimate();
   if(estimate.wire && !estimate.wire.circuitSpec) estimate.wire.circuitSpec={};   // 旧保存の後方互換
   typeColors=st.typeColors||{}; baseOpacity=(st.baseOpacity!=null?st.baseOpacity:1); copyStep=st.copyStep||1000;
@@ -2708,7 +2719,7 @@ function applyState(st){
   if(st.baseVec&&st.baseVec.text){ try{ setBaseVec(st.baseVec.text); vec=true; mmPerPx=1; }catch(e){ setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); applyBaseOpacity(); } }
   else if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); }
   else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); applyBaseOpacity(); }
-  updatePdfPageBtn();
+  updatePdfPageBtn(); applyBgInvert();     // 背景反転状態を復元
   document.getElementById('uploader').style.display='none';
   if(!vec) document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
   refreshAllPaletteColors();
@@ -2826,7 +2837,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.13', APP_DATE='2026-07-08';
+const APP_VERSION='0.14', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
