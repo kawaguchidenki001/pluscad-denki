@@ -1584,7 +1584,9 @@ function offsetPolyline(pts,d){
     const p1=[pts[i-1][0]+d*nrm[i-1][0], pts[i-1][1]+d*nrm[i-1][1]];
     const p2=[pts[i][0]+d*nrm[i][0],     pts[i][1]+d*nrm[i][1]];
     const ip=_lineInt(p1,dir[i-1], p2,dir[i]);
-    out.push(ip || p2);       // 平行(交点なし)は法線オフセット点で代用
+    // 平行(交点なし)や浅い曲がりでのミター暴走は法線オフセット点で代用（マイターリミット≒4|d|）
+    const useIp = ip && Math.hypot(ip[0]-pts[i][0], ip[1]-pts[i][1]) <= 4*Math.abs(d)+1;
+    out.push(useIp ? ip : p2);
   }
   out.push(off(n-1));
   return out.map(p=>[Math.round(p[0]),Math.round(p[1])]);
@@ -3223,7 +3225,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.22', APP_DATE='2026-07-08';
+const APP_VERSION='0.23', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
