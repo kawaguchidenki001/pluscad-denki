@@ -229,6 +229,11 @@
   #wireinfo:empty{display:none}
   #wireinfo .witit{font-size:11.5px;color:var(--txt-dim);margin-bottom:7px;line-height:1.5}
   #wireinfo .witit b{color:#fff}
+  #wireinfo .wilab{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--txt);margin-bottom:6px;cursor:pointer}
+  #wireinfo .wilab input{width:14px;height:14px}
+  #wireinfo table.wicable th{font-size:10px;color:var(--txt-dim);text-align:left;font-weight:700;padding:2px 4px}
+  #wireinfo table.wicable td{padding:2px 4px;vertical-align:middle}
+  #wireinfo select.cablesel{width:100%;height:26px;background:var(--panel2);color:#fff;border:1px solid var(--panel-line);border-radius:6px;font-size:11px;font-family:var(--mono)}
 
   /* ---- 見積（Step D） ---- */
   #modal-estimate{position:fixed;inset:0;z-index:60;background:var(--panel);display:none;flex-direction:column;color:var(--txt)}
@@ -698,9 +703,10 @@ function defaultEstimate(){
   return { head:{name:'',to:'',no:'',date:''},
     opts:{siteRate:0, adminRate:0, discount:0, taxRate:10, roundDown:true, showBreak:false},
     lines:{},   // [記号id]: {cat,name,spec,work,qty,off,user}（ユーザー上書きのみ保持）
-    wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}} };
+    wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}, circuitSpec:{}} };  // circuitSpec: 回路→ケーブルkey
 }
 let estimate = defaultEstimate();
+let wireLabels = false;    // 配線の線種傍記を図に表示
 // 追加機能（色/コピー/割当/下敷き濃さ）
 let typeColors = {};       // {記号id: 上書き色}（種別ごとの色変更）
 let baseOpacity = 1;       // 下敷き(PDF/画像)の不透明度 0.2〜1
@@ -1754,20 +1760,36 @@ function autoWire(){
   });
   // 手動配線は端点の新しい回路に追従（回路別集計・色の不整合を防ぐ。両端点から決定的に導出）
   wires.filter(w=>!w.auto).forEach(w=>{ w.circuit=wireCircuitOf(w.a,w.b); });
+  // 回路番号が振り直されるため、回路ごとの線種指定はリセット（古い番号に誤って残ると別回路を誤集計するため）
+  const hadSpec=estimate.wire&&estimate.wire.circuitSpec&&Object.keys(estimate.wire.circuitSpec).length;
+  if(estimate.wire) estimate.wire.circuitSpec={};
   renderSyms(); renderWireInfo(); pushHistory();
-  toast(circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません');
+  toast((circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません')+(hadSpec?'（回路振り直しにつき線種指定はリセット）':''));
 }
 
+// 配線の傍記（線種）ラベル位置＋文字。長い脚の中点に置く。
+function wireLabelInfo(w){
+  const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
+  if(!a||!b) return null;
+  const ct=cableByKey(cableKeyFor(w)); if(!ct) return null;
+  const hLen=Math.abs(b.x-a.x), vLen=Math.abs(b.y-a.y);
+  let x,y;
+  if(hLen>=vLen){ x=(a.x+b.x)/2; y=a.y-5; }      // 水平脚の中点（Y=a.y）
+  else { x=b.x; y=(a.y+b.y)/2-5; }               // 垂直脚の中点（X=b.x）
+  return {x,y,text:ct.label,col:circuitColor(w.circuit)};
+}
 function renderWires(){
   if(!wireg) return;
+  let labels='';
   wireg.innerHTML=wires.map(w=>{
     const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
     if(!a||!b) return '';
     const col=circuitColor(w.circuit);
     const pts=wirePath(a,b).map(q=>q.join(',')).join(' ');   // 直角L字
+    if(wireLabels){ const li=wireLabelInfo(w); if(li) labels+=`<text x="${li.x}" y="${li.y}" font-size="13" text-anchor="middle" fill="${li.col}" stroke="#12151a" stroke-width="3" paint-order="stroke" style="font-family:var(--mono)">${escHtml(li.text)}</text>`; }
     return `<polyline class="wirehit" data-uid="${w.uid}" points="${pts}" fill="none" stroke="#000" stroke-opacity="0" stroke-width="16" pointer-events="stroke" vector-effect="non-scaling-stroke"/>`+
            `<polyline class="wire" points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
-  }).join('');
+  }).join('')+labels;
   wireg.querySelectorAll('.wirehit').forEach(ln=>{
     ln.addEventListener('pointerdown',ev=>{ if(!wireMode) return; ev.stopPropagation(); deleteWire(+ln.dataset.uid); });
   });
@@ -1776,15 +1798,26 @@ function renderWireInfo(){
   const host=document.getElementById('wireinfo');
   if(!wires.length){ host.innerHTML=''; return; }
   const cal=mmPerPx!=null;
-  const byC={}; wires.forEach(w=>{ byC[w.circuit]=(byC[w.circuit]||0)+wireLenPx(w); });
+  const byC={}; wires.forEach(w=>{ const c=(w.circuit==null?0:w.circuit); byC[c]=(byC[c]||0)+wireLenPx(w); });
+  const opts=k=>CABLE_TYPES.map(ct=>`<option value="${ct.key}"${ct.key===k?' selected':''}>${ct.label}</option>`).join('');
   let total=0, rows='';
   Object.keys(byC).map(Number).sort((a,b)=>a-b).forEach(c=>{
     const len=byC[c]; total+=len;
     const val=cal ? (len*mmPerPx/1000).toFixed(1)+' m' : Math.round(len)+' px';
-    rows+=`<tr><td><span class="sw" style="background:${circuitColor(c)}"></span>${c?('回路'+c):'手動/未割当'}</td><td class="n">${val}</td></tr>`;
+    const key=(estimate.wire.circuitSpec&&estimate.wire.circuitSpec[c])||defaultCableKeyForCircuit(c);
+    rows+=`<tr><td><span class="sw" style="background:${circuitColor(c)}"></span>${c?('回路'+c):'手動/未割当'}</td>`
+      +`<td><select class="cablesel" data-c="${c}">${opts(key)}</select></td><td class="n">${val}</td></tr>`;
   });
   const tv=cal ? (total*mmPerPx/1000).toFixed(1)+' m' : Math.round(total)+' px';
-  host.innerHTML=`<div class="witit">配線 <b>${wires.length}</b>本 ／ 配線長合計 <b>${tv}</b>${cal?'':'（縮尺未設定）'}</div><table class="tly">${rows}</table>`;
+  host.innerHTML=`<div class="witit">配線 <b>${wires.length}</b>本 ／ 配線長合計 <b>${tv}</b>${cal?'':'（縮尺未設定）'}</div>`
+    +`<label class="wilab"><input type="checkbox" id="wire-labels"${wireLabels?' checked':''}>線種を図に表示（傍記）</label>`
+    +`<table class="tly wicable"><tr><th>回路</th><th>線種・条数</th><th>長さ</th></tr>${rows}</table>`;
+  host.querySelectorAll('.cablesel').forEach(s=>s.onchange=()=>{
+    estimate.wire.circuitSpec=estimate.wire.circuitSpec||{}; estimate.wire.circuitSpec[+s.dataset.c]=s.value;
+    renderWires(); if(document.getElementById('modal-estimate')&&document.getElementById('modal-estimate').classList.contains('show')) renderEstimate();
+    scheduleAutosave(); pushHistory();
+  });
+  const wl=host.querySelector('#wire-labels'); if(wl) wl.onchange=()=>{ wireLabels=wl.checked; renderWires(); scheduleAutosave(); };
 }
 
 el('btn-wire').onclick=toggleWireMode;
@@ -1870,7 +1903,36 @@ const SYMMAP={
   riser:null,   // 立上り＝配線付随。品目化しない
 };
 const CABLE_CAT='ケーブル（強電）', CABLE_NAME='ケーブル', CONDUIT_CAT='電線管・ダクト・線ぴ';
-const WIRE_DEF={ lighting:{label:'配線 照明系',spec:'VVF 1.6mm -2C'}, outlet:{label:'配線 コンセント系',spec:'VVF 2.0mm -2C'}, feeder:{label:'配線 電源送り',spec:'VVF 2.0mm -2C'} };
+// 選択できるケーブル（線種・条数）カタログ。specは単価マスタ検索用。
+const CABLE_TYPES=[
+  {key:'vvf16_2c',label:'VVF1.6-2C',spec:'VVF 1.6mm -2C'},
+  {key:'vvf16_3c',label:'VVF1.6-3C',spec:'VVF 1.6mm -3C'},
+  {key:'vvf20_2c',label:'VVF2.0-2C',spec:'VVF 2.0mm -2C'},
+  {key:'vvf20_3c',label:'VVF2.0-3C',spec:'VVF 2.0mm -3C'},
+  {key:'vvf26_2c',label:'VVF2.6-2C',spec:'VVF 2.6mm -2C'},
+  {key:'vvr20_2c',label:'VVR2.0-2C',spec:'VVR 2.0mm -2C'},
+  {key:'cv20_2c', label:'CV2.0-2C', spec:'CV 2.0mm -2C'},
+  {key:'iv16',    label:'IV1.6',    spec:'IV 1.6mm'},
+];
+const cableByKey=k=>CABLE_TYPES.find(c=>c.key===k);
+// 回路の既定ケーブル：その回路の機器にコンセントを含む=2.0-2C、それ以外(照明)=1.6-2C
+// （電源送りfeederは回路に属しその回路の既定に従う＝照明回路のfeederも1.6-2C）
+function defaultCableKeyForCircuit(c){
+  const cc=(c==null?0:c);
+  const devs=placed.filter(p=>((p.circuit==null?0:p.circuit))===cc);
+  const hasOutlet=devs.some(p=>catOf(p)==='コンセント');
+  if(hasOutlet) return 'vvf20_2c';
+  if(devs.length) return 'vvf16_2c';
+  // 機器に紐付かない回路（手動配線のみ等）は端点から推定
+  const ws=wires.filter(w=>((w.circuit==null?0:w.circuit))===cc);
+  const outletWire=ws.some(w=>{ const a=placed.find(p=>p.uid===w.a),b=placed.find(p=>p.uid===w.b); return (a&&catOf(a)==='コンセント')||(b&&catOf(b)==='コンセント'); });
+  return outletWire?'vvf20_2c':'vvf16_2c';
+}
+function cableKeyFor(w){
+  const cs=(estimate.wire&&estimate.wire.circuitSpec)||{};
+  const c=(w.circuit==null?0:w.circuit);
+  return (cs[c]&&cableByKey(cs[c]))?cs[c]:defaultCableKeyForCircuit(c);
+}
 
 const SEP=String.fromCharCode(1);   // byNameキー・仕様値の区切り（データに現れない制御文字）
 function normStr(s){ return String(s==null?'':s).normalize('NFKC').toLowerCase().replace(/[\s　・（）()･]/g,''); }
@@ -1943,12 +2005,6 @@ function defaultConduitSel(){
   }
   return null;
 }
-function wireGroup(w){
-  if(w.kind==='power') return 'feeder';
-  const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
-  if((a&&catOf(a)==='コンセント')||(b&&catOf(b)==='コンセント')) return 'outlet';
-  return 'lighting';
-}
 function storeFor(id){
   if(id.startsWith('wire:')){ const g=id.slice(5); return estimate.wire.groups[g]||(estimate.wire.groups[g]={}); }
   if(id.startsWith('conduit:')) return estimate.wire.conduit||(estimate.wire.conduit={});
@@ -1965,22 +2021,22 @@ function buildRows(){
     const autoQty=counts[type]; const qty=(ln.qty!=null)?ln.qty:autoQty;
     rows.push({id:'sym:'+type,kind:'device',label:s.nm,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:(SYMMAP[type].unit||''),autoQty,qty,off:!!ln.off,user:!!ln.user});
   });
-  const glen={lighting:0,outlet:0,feeder:0};
-  wires.forEach(w=>{ glen[wireGroup(w)]+=wireLenPx(w); });
-  ['lighting','outlet','feeder'].forEach(g=>{
-    if(glen[g]<=0) return;
-    const wl=estimate.wire.groups[g]||{};
-    const sel=(wl.user&&wl.name)?{cat:wl.cat,name:wl.name,spec:wl.spec,work:wl.work}:defaultCableSel(WIRE_DEF[g].spec);
+  // 配線：ケーブル（線種・条数）別に集計（回路ごとの指定を反映）
+  const glen={};
+  wires.forEach(w=>{ const k=cableKeyFor(w); glen[k]=(glen[k]||0)+wireLenPx(w); });
+  CABLE_TYPES.filter(ct=>glen[ct.key]>0).forEach(ct=>{
+    const g=ct.key, wl=estimate.wire.groups[g]||{};
+    const sel=(wl.user&&wl.name)?{cat:wl.cat,name:wl.name,spec:wl.spec,work:wl.work}:defaultCableSel(ct.spec);
     const rec=sel?findRec(sel):null;
     let qtyM=null;
     if(mmPerPx!=null) qtyM=(glen[g]*mmPerPx/1000)*(1+(estimate.wire.slack||0)/100);
     else if(estimate.wire.manualLen[g]!=null) qtyM=estimate.wire.manualLen[g]*(1+(estimate.wire.slack||0)/100);
     const autoQty=qtyM!=null?Math.round(qtyM*10)/10:null;
     const qty=(wl.qty!=null)?wl.qty:autoQty;
-    rows.push({id:'wire:'+g,kind:'wire',label:WIRE_DEF[g].label,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!wl.off,user:!!wl.user,uncal:(mmPerPx==null&&estimate.wire.manualLen[g]==null)});
+    rows.push({id:'wire:'+g,kind:'wire',label:'配線 '+ct.label,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!wl.off,user:!!wl.user,uncal:(mmPerPx==null&&estimate.wire.manualLen[g]==null)});
   });
   if(estimate.wire.conduitOn && mmPerPx!=null){
-    const tot=glen.lighting+glen.outlet+glen.feeder;
+    const tot=Object.values(glen).reduce((a,b)=>a+b,0);   // 全ケーブルの合計長（glenはcable key別）
     if(tot>0){
       const cw=estimate.wire.conduit||{};
       const sel=(cw.user&&cw.name)?{cat:cw.cat,name:cw.name,spec:cw.spec,work:cw.work}:defaultConduitSel();
@@ -2393,7 +2449,9 @@ function buildPrintSVG(){
     const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
     if(!a||!b) return '';
     const pts=wirePath(a,b).map(q=>q.join(',')).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${printInk(circuitColor(w.circuit))}" stroke-width="2"/>`;
+    let s=`<polyline points="${pts}" fill="none" stroke="${printInk(circuitColor(w.circuit))}" stroke-width="2"/>`;
+    if(wireLabels){ const li=wireLabelInfo(w); if(li) s+=`<text x="${li.x}" y="${li.y}" font-size="13" text-anchor="middle" fill="#111" stroke="#fff" stroke-width="3" paint-order="stroke" font-family="monospace">${escHtml(li.text)}</text>`; }
+    return s;
   }).join('');
   const uses=placed.map(p=>{
     const s=symById(p.type); if(!s) return '';
@@ -2523,7 +2581,7 @@ function renderTally(){
 // ============ 保存/読込/出力 ============
 // 現在の全状態を1オブジェクトに（ファイル/ブラウザ内保存 共通）
 function buildState(){
-  return {ver:'alpha-mvp-7', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm};
+  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels};
 }
 // 状態オブジェクトを適用（ファイル読込・ブラウザ内保存の復元 共通）
 function applyState(st){
@@ -2535,8 +2593,9 @@ function applyState(st){
   rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
   wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
   texts=st.texts||[]; textSeq=st.textSeq||(texts.reduce((m,t)=>Math.max(m,t.uid||0),0)+1);
-  snapOn=!!st.snapOn; gridMm=st.gridMm||455;
+  snapOn=!!st.snapOn; gridMm=st.gridMm||455; wireLabels=!!st.wireLabels;
   estimate=st.estimate||defaultEstimate();
+  if(estimate.wire && !estimate.wire.circuitSpec) estimate.wire.circuitSpec={};   // 旧保存の後方互換
   typeColors=st.typeColors||{}; baseOpacity=(st.baseOpacity!=null?st.baseOpacity:1); copyStep=st.copyStep||1000;
   pdfDocCur=null;                          // 復元後はライブPDFなし（保存済みは描画済みページ画像）
   let vec=false;
@@ -2661,7 +2720,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.11', APP_DATE='2026-07-08';
+const APP_VERSION='0.12', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
