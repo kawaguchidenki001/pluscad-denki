@@ -1651,6 +1651,7 @@ document.getElementById('calib-ok').onclick=()=>{
   if(!isFinite(mm)||mm<=0){ toast('正しい数値を入力してください'); return; }
   const dx=calibPts[1].x-calibPts[0].x, dy=calibPts[1].y-calibPts[0].y;
   const distpx=Math.hypot(dx,dy);
+  if(!(distpx>0.5)){ toast('2点が近すぎます。離れた2点をタップし直してください'); return; }   // 0長較正でmmPerPx=Infinityになるのを防止
   const wasUncal=(mmPerPx==null);
   mmPerPx=mm/distpx;
   endCalib();
@@ -2807,7 +2808,9 @@ function buildTitleBlockSVG(rc){
   g+=`<rect x="${x0+S*0.8}" y="${y0+S*0.8}" width="${x1-x0-S*1.6}" height="${y1-y0-S*1.6}" fill="none" stroke="#111" stroke-width="${sw}"/>`;
   // タイトル欄（右下）
   const h=estimate.head||{};
-  const rows=[['工事名', h.name||''],['宛先', h.to||''],['見積番号', h.no||''],['作成日', h.date||fmtTs(Date.now()).slice(0,10)],['縮尺', (mmPerPx!=null)?'実寸(mm)':'—']];
+  const scSel=(el('print-scale')&&el('print-scale').value)||'fit';   // 固定縮尺印刷なら 1:S を表示
+  const scaleLabel=(mmPerPx==null)?'—':(scSel!=='fit'?`1:${scSel}`:'実寸(mm)');
+  const rows=[['工事名', h.name||''],['宛先', h.to||''],['見積番号', h.no||''],['作成日', h.date||fmtTs(Date.now()).slice(0,10)],['縮尺', scaleLabel]];
   const tbW=Math.min(rc.vw*0.42, 78*S), tbH=(rows.length)*fs*1.8, tbX=x1-S*0.8-tbW, tbY=y1-S*0.8-tbH;
   g+=`<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="#fff" stroke="#111" stroke-width="${sw*1.5}"/>`;
   rows.forEach((r,i)=>{ const ry=tbY+i*fs*1.8;
@@ -3081,7 +3084,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.19', APP_DATE='2026-07-08';
+const APP_VERSION='0.20', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
