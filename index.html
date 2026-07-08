@@ -964,11 +964,17 @@ function renderLayers(){
     row.querySelectorAll('[data-act]').forEach(elm=>elm.addEventListener('click',ev=>{ ev.stopPropagation(); layerAction(id,elm.dataset.act); })); });
   syncLayerSelects();
 }
-function afterLayerChange(){ applyBaseLayer(); renderSyms(); renderTexts(); renderLayers(); scheduleAutosave(); }  // renderSymsがrenderWiresも呼ぶ
+function afterLayerChange(){
+  // 表示OFF/ロックで選択できなくなった記号・文字は選択解除（バーも閉じる）＝lock/vis/onlyで一貫
+  if(selUid!=null){ const p=placed.find(x=>x.uid===selUid); if(!p||!layerSelectable(p.layer)) selUid=null; }
+  if(selSet.length) selSet=selSet.filter(u=>{ const p=placed.find(x=>x.uid===u); return p&&layerSelectable(p.layer); });
+  if(selTextUid!=null && !layerSelectable('text')) selTextUid=null;
+  applyBaseLayer(); renderSyms(); renderTexts(); renderSel(); renderMselbar(); renderLayers(); scheduleAutosave();  // renderSymsがrenderWiresも呼ぶ
+}
 function layerAction(id,act){
   const L=findLayer(id); if(!L) return;
   if(act==='vis'){ L.visible=(L.visible===false); afterLayerChange(); }
-  else if(act==='lock'){ L.locked=!L.locked; if(L.locked&&(selUid!=null||selSet.length)){ const sp=placed.find(x=>x.uid===selUid); if(sp&&sp.layer===id){ selUid=null; renderSel(); } selSet=selSet.filter(u=>{ const p=placed.find(x=>x.uid===u); return !(p&&p.layer===id); }); renderMselbar(); } afterLayerChange(); }
+  else if(act==='lock'){ L.locked=!L.locked; afterLayerChange(); }
   else if(act==='only'){ layers.forEach(x=>x.visible=(x.id===id||x.id==='base')); afterLayerChange(); toast('「'+L.name+'」だけ表示にしました'); }
   else if(act==='rename'){ const nm=prompt('レイヤー名', L.name); if(nm==null)return; const v=nm.trim(); if(v){ L.name=v; afterLayerChange(); } }
   else if(act==='del'){ if(!L.custom) return;
