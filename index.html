@@ -235,6 +235,28 @@
   #wireinfo table.wicable td{padding:2px 4px;vertical-align:middle}
   #wireinfo select.cablesel{width:100%;height:26px;background:var(--panel2);color:#fff;border:1px solid var(--panel-line);border-radius:6px;font-size:11px;font-family:var(--mono)}
 
+  /* ---- レイヤー（v0.16） ---- */
+  #layerspanel{flex:none;border-top:1px solid var(--panel-line);padding:8px 12px 10px;max-height:38%;overflow-y:auto}
+  #layerspanel>summary{font-size:11.5px;color:var(--txt);font-weight:700;cursor:pointer;letter-spacing:.03em;list-style:none}
+  #layerspanel>summary::-webkit-details-marker{display:none}
+  #layerspanel>summary::before{content:'▾ ';color:var(--txt-dim)}
+  #layerspanel:not([open])>summary::before{content:'▸ '}
+  #layerspanel #lay-hint{color:var(--txt-dim);font-weight:400;font-size:10px}
+  #layerlist{margin:8px 0 6px}
+  .layrow{display:flex;align-items:center;gap:5px;padding:3px 2px;border-radius:6px}
+  .layrow:hover{background:var(--panel2)}
+  .layrow .lbtn{width:24px;height:24px;flex:none;background:transparent;border:1px solid transparent;border-radius:6px;font-size:13px;cursor:pointer;color:var(--txt);display:flex;align-items:center;justify-content:center;padding:0}
+  .layrow .lbtn:hover{border-color:var(--panel-line)}
+  .layrow .lbtn.off{opacity:.32}
+  .layrow .lnm{flex:1;font-size:11.5px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;padding:2px 0}
+  .layrow .lnm.hid{color:var(--txt-dim);text-decoration:line-through}
+  .layrow .lcnt{font-family:var(--mono);font-size:10px;color:var(--txt-dim);flex:none;min-width:18px;text-align:right}
+  .layrow .lonly,.layrow .ldel{font-size:9.5px;color:var(--txt-dim);flex:none}
+  .layaddbtn{width:100%;background:var(--panel2);border:1px dashed var(--panel-line);color:var(--txt);border-radius:8px;padding:7px;font-size:11px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  .layaddbtn:hover{background:var(--panel3)}
+  select.laysel{height:26px;max-width:104px;background:var(--panel2);color:#fff;border:1px solid var(--panel-line);border-radius:6px;font-size:11px;font-family:var(--jp)}
+  .sym.lk{opacity:.85;pointer-events:none}   /* ロックレイヤー＝表示のみ・タップは背面(ステージ)へ通す */
+
   /* ---- 見積（Step D） ---- */
   #modal-estimate{position:fixed;inset:0;z-index:60;background:var(--panel);display:none;flex-direction:column;color:var(--txt)}
   #modal-estimate.show{display:flex}
@@ -358,6 +380,8 @@
         <button id="sel-dup" title="複製（同じ記号をもう1つ置く）" style="width:auto;padding:0 10px">複製</button>
         <button id="sel-assign" title="点灯照明を選択" style="display:none;width:auto;padding:0 10px">点灯照明</button>
         <div class="sep"></div>
+        <div class="grp" title="この記号のレイヤー"><span class="lbl2">層</span><select id="sel-layer" class="laysel"></select></div>
+        <div class="sep"></div>
         <button id="sel-del" class="del" title="削除">🗑</button>
       </div>
       <div id="mselbar">
@@ -372,6 +396,8 @@
         <button id="msel-alV" class="wd" title="X座標を揃えて縦一列に">縦揃え</button>
         <button id="msel-dsH" class="wd" title="横方向に等間隔に配置">横等間隔</button>
         <button id="msel-dsV" class="wd" title="縦方向に等間隔に配置">縦等間隔</button>
+        <div class="sep"></div>
+        <div class="grp" title="選択中をこのレイヤーへ移動"><span class="lbl2">層へ</span><select id="msel-layer" class="laysel"></select></div>
         <div class="sep"></div>
         <button id="msel-dup" class="wd" title="選択中を全部複製">複製</button>
         <button id="msel-del" class="del" title="選択中を全部削除">🗑</button>
@@ -439,6 +465,11 @@
       </div>
       <div id="tallybody"></div>
       <div id="wireinfo"></div>
+      <details id="layerspanel" open>
+        <summary>レイヤー<span id="lay-hint">（表示ON/OFF・ロック）</span></summary>
+        <div id="layerlist"></div>
+        <button type="button" id="lay-add" class="layaddbtn">＋レイヤーを追加</button>
+      </details>
       <div class="foot">
         <button id="btn-csv">集計CSV</button>
         <button id="btn-clear">全消去</button>
@@ -726,6 +757,32 @@ let selSet = [];           // 複数選択（シンボルuid配列）
 let mselMode = false;      // 範囲選択モード（矩形1回で自動終了）
 let mselStart = null;      // 選択矩形の始点(world)
 let groupDrag = null;      // 一括ドラッグ {sx,sy,items:[{p,ox,oy}],moved}
+// レイヤー分け（v0.16）＝JW-CADのレイヤに相当。配置シンボルは.layerを持ち種別で自動振分、配線/文字/下敷きは固定レイヤ。
+const DEFAULT_LAYERS = [
+  {id:'base',    name:'下敷き'},
+  {id:'lighting',name:'照明'},
+  {id:'outlet',  name:'コンセント'},
+  {id:'switch',  name:'スイッチ'},
+  {id:'power',   name:'盤・機器'},
+  {id:'weak',    name:'弱電・防災'},
+  {id:'conn',    name:'配線・接続材'},
+  {id:'wire',    name:'配線'},
+  {id:'text',    name:'文字・注記'},
+];
+const CAT_LAYER = {'照明':'lighting','コンセント':'outlet','スイッチ':'switch','盤・機器':'power','弱電・防災':'weak','配線・接続':'conn'};
+let layers = DEFAULT_LAYERS.map(L=>({id:L.id,name:L.name,visible:true,locked:false}));  // 表示状態は保存対象・履歴には積まない
+function findLayer(id){ return layers.find(L=>L.id===id); }
+function layerVisible(id){ const L=findLayer(id); return L?L.visible!==false:true; }   // 未知レイヤは表示扱い（安全側）
+function layerLocked(id){ const L=findLayer(id); return L?!!L.locked:false; }
+function layerSelectable(id){ return layerVisible(id)&&!layerLocked(id); }
+function layerForType(type){ const s=symById(type); return (s&&CAT_LAYER[s.cat])||'conn'; }  // 種別→レイヤid
+function normalizeLayers(saved){
+  const base=DEFAULT_LAYERS.map(L=>({id:L.id,name:L.name,visible:true,locked:false}));
+  if(Array.isArray(saved)) saved.forEach(s=>{ if(!s||!s.id)return; const b=base.find(L=>L.id===s.id);
+    if(b){ b.visible=s.visible!==false; b.locked=!!s.locked; if(s.name)b.name=s.name; }
+    else base.push({id:s.id,name:s.name||s.id,visible:s.visible!==false,locked:!!s.locked,custom:true}); });
+  return base;
+}
 let snapOn = false;        // グリッド吸着
 let gridMm = 455;          // グリッド間隔（較正時mm／未較正px。既定=尺モジュール半間の1/2）
 
@@ -863,7 +920,7 @@ el('grid-mm').addEventListener('input',e=>{ const v=parseFloat(e.target.value); 
 
 // ============ 下敷き設定 ============
 function setBaseSize(w,h){ baseW=w; baseH=h; baseEl.style.width=w+'px'; baseEl.style.height=h+'px'; overlay.setAttribute('width',w); overlay.setAttribute('height',h); overlay.setAttribute('viewBox',`0 0 ${w} ${h}`); renderGrid(); }
-function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); applyBgInvert(); baseToken++; }
+function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); applyBgInvert(); applyBaseLayer(); baseToken++; }
 function applyBaseOpacity(){ baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
 // 背景反転：下敷き画像はinvert(白→黒)、紙(#base)背景も暗色に。ベクター下敷きは暗背景に映える色へ。配置シンボルは反転しない。
 function applyBgInvert(){
@@ -873,6 +930,62 @@ function applyBgInvert(){
   const b=el('btn-invert'); if(b) b.classList.toggle('on',bgInvert);
 }
 el('btn-invert').onclick=()=>{ bgInvert=!bgInvert; applyBgInvert(); scheduleAutosave(); toast(bgInvert?'背景を反転しました（白→黒）':'背景を戻しました'); };
+// 下敷きレイヤーの表示ON/OFF（ラスタ＝#baseimg、ベクター＝#baseg 両方を切替）
+function applyBaseLayer(){ const v=layerVisible('base'); if(baseimg) baseimg.style.visibility=v?'':'hidden'; if(baseg) baseg.style.visibility=v?'':'hidden'; }
+
+// ── レイヤーパネル（v0.16） ──
+function layerCounts(){
+  const c={}; placed.forEach(p=>{ const id=findLayer(p.layer)?p.layer:layerForType(p.type); c[id]=(c[id]||0)+1; });
+  c.wire=(c.wire||0)+wires.length; c.text=(c.text||0)+texts.length; c.base=(baseSrc||baseVec)?1:0;
+  return c;
+}
+// 記号の移動先候補＝下敷き/配線/文字を除く（それらは固定レイヤー）
+function layerOptionsHtml(sel){ return layers.filter(L=>L.id!=='base'&&L.id!=='wire'&&L.id!=='text')
+  .map(L=>`<option value="${L.id}"${L.id===sel?' selected':''}>${escHtml(L.name)}</option>`).join(''); }
+function syncLayerSelects(){
+  const so=el('sel-layer'); if(so){ const p=placed.find(x=>x.uid===selUid); so.innerHTML=layerOptionsHtml(p?p.layer:''); }
+  const mo=el('msel-layer'); if(mo){ mo.innerHTML='<option value="">層へ移動…</option>'+layerOptionsHtml(''); }
+}
+function renderLayers(){
+  const host=el('layerlist'); if(!host) return;
+  const cnt=layerCounts();
+  host.innerHTML=layers.map(L=>{
+    const n=cnt[L.id]||0, eye=L.visible!==false, lock=!!L.locked;
+    return `<div class="layrow" data-id="${L.id}">
+      <button class="lbtn eye${eye?'':' off'}" data-act="vis" title="表示/非表示">${eye?'👁':'🚫'}</button>
+      <button class="lbtn lock${lock?'':' off'}" data-act="lock" title="ロック（表示のみ・編集不可）">${lock?'🔒':'🔓'}</button>
+      <span class="lnm${eye?'':' hid'}" data-act="rename" title="名前を変更">${escHtml(L.name)}</span>
+      <span class="lcnt">${n||''}</span>
+      <button class="lbtn lonly" data-act="only" title="この層だけ表示（下敷きは残す）">◎</button>
+      ${L.custom?`<button class="lbtn ldel" data-act="del" title="レイヤー削除">🗑</button>`:'<span style="width:24px;flex:none"></span>'}
+    </div>`;
+  }).join('');
+  host.querySelectorAll('.layrow').forEach(row=>{ const id=row.dataset.id;
+    row.querySelectorAll('[data-act]').forEach(elm=>elm.addEventListener('click',ev=>{ ev.stopPropagation(); layerAction(id,elm.dataset.act); })); });
+  syncLayerSelects();
+}
+function afterLayerChange(){ applyBaseLayer(); renderSyms(); renderTexts(); renderLayers(); scheduleAutosave(); }  // renderSymsがrenderWiresも呼ぶ
+function layerAction(id,act){
+  const L=findLayer(id); if(!L) return;
+  if(act==='vis'){ L.visible=(L.visible===false); afterLayerChange(); }
+  else if(act==='lock'){ L.locked=!L.locked; if(L.locked&&(selUid!=null||selSet.length)){ const sp=placed.find(x=>x.uid===selUid); if(sp&&sp.layer===id){ selUid=null; renderSel(); } selSet=selSet.filter(u=>{ const p=placed.find(x=>x.uid===u); return !(p&&p.layer===id); }); renderMselbar(); } afterLayerChange(); }
+  else if(act==='only'){ layers.forEach(x=>x.visible=(x.id===id||x.id==='base')); afterLayerChange(); toast('「'+L.name+'」だけ表示にしました'); }
+  else if(act==='rename'){ const nm=prompt('レイヤー名', L.name); if(nm==null)return; const v=nm.trim(); if(v){ L.name=v; afterLayerChange(); } }
+  else if(act==='del'){ if(!L.custom) return;
+    if(!confirm('レイヤー「'+L.name+'」を削除します。中の記号は種別ごとの既定レイヤーへ移します。よろしいですか？')) return;
+    placed.forEach(p=>{ if(p.layer===id) p.layer=layerForType(p.type); });
+    layers=layers.filter(x=>x.id!==id); afterLayerChange(); pushHistory(); }
+}
+if(el('lay-add')) el('lay-add').onclick=()=>{
+  const nm=prompt('新しいレイヤー名','レイヤー'+(layers.length)); if(nm==null)return;
+  const v=(nm.trim())||('レイヤー'+(layers.length));
+  let n=1; while(findLayer('usr'+n)) n++;
+  layers.push({id:'usr'+n,name:v,visible:true,locked:false,custom:true}); afterLayerChange();
+};
+if(el('sel-layer')) el('sel-layer').onchange=e=>{ const p=placed.find(x=>x.uid===selUid); if(!p)return; p.layer=e.target.value; renderSyms(); renderLayers(); pushHistory(); };
+if(el('msel-layer')) el('msel-layer').onchange=e=>{ const id=e.target.value; if(!id||!selSet.length){ e.target.value=''; return; }
+  const L=findLayer(id); selSet.forEach(u=>{ const p=placed.find(x=>x.uid===u); if(p)p.layer=id; }); e.target.value='';
+  renderSyms(); renderLayers(); pushHistory(); toast(selSet.length+'個を「'+(L?L.name:'')+'」へ移動'); };
 el('base-op').addEventListener('input',e=>{ baseOpacity=(+e.target.value||100)/100; baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; });
 function clearBase(){ baseSrc=null; baseVec=null; baseg.innerHTML=''; baseimg.removeAttribute('src'); setBaseSize(1200,850); baseToken++; pdfDocCur=null; if(el('btn-pdfpage')) updatePdfPageBtn(); }
 function applyBaseVecOpacity(){ baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
@@ -982,7 +1095,7 @@ function setBaseVec(dxfText){
   mmPerPx=1;                                       // DXF/JWWは実mm→較正不要
   const unitNote=(U!==1)?`（${U===25.4?'inch':U===304.8?'ft':U===1000?'m':U===10?'cm':'単位'}→mm換算）`:'';
   document.getElementById('scaleinfo').innerHTML=`縮尺：<b>1px = 1.00mm</b>（DXF/JWW実寸${unitNote}）`;
-  applyBaseVecOpacity(); applyBgInvert();          // ベクター下敷きの線色＝背景反転状態に追従
+  applyBaseVecOpacity(); applyBgInvert(); applyBaseLayer();   // 線色＝背景反転／表示＝下敷きレイヤーに追従
   baseToken++;
   if(capped) toast(`図形が多いため一部のみ表示しています（${MAXP}要素上限）`);
   return prims.length;
@@ -1100,8 +1213,8 @@ el('pdfpage-close').onclick=()=>el('modal-pdfpage').classList.remove('show');
 // ============ シンボル配置・描画 ============
 // placed へ 1点追加し uid を返す（描画しない＝一括配置用）
 function pushSymbol(type,x,y,meta){
-  const p={uid:uidSeq++,type,x:Math.round(x),y:Math.round(y),rot:0};
-  if(meta) Object.assign(p,meta);
+  const p={uid:uidSeq++,type,x:Math.round(x),y:Math.round(y),rot:0,layer:layerForType(type)};
+  if(meta) Object.assign(p,meta);   // meta.layer があれば上書き（複製/コピーで元のレイヤーを引き継ぐ）
   placed.push(p);
   return p.uid;
 }
@@ -1111,20 +1224,22 @@ function renderSyms(){
   const asw=(assignMode&&assignSwUid!=null)?placed.find(x=>x.uid===assignSwUid):null;
   symg.innerHTML=placed.map(p=>{
     const s=symById(p.type); if(!s)return '';
+    if(!layerVisible(p.layer)) return '';                 // 非表示レイヤーの記号は描かない
+    const lk=layerLocked(p.layer);                        // ロックレイヤー＝表示のみ（選択・移動不可）
     const cx=p.x, cy=p.y;
     const sel=(p.uid===selUid)?' sel':'';
     const wp=(p.uid===wirePendA)?' wpend':'';
     const asg=(asw&&asw.controls&&asw.controls.includes(p.uid))?' asgn':'';
     const ms=selSet.includes(p.uid)?' msel':'';
-    return `<g class="sym${sel}${wp}${asg}${ms}" data-uid="${p.uid}" transform="translate(${cx},${cy}) rotate(${p.rot})" style="color:${colorOf(p.type)}">
-      <rect x="${-SZ/2}" y="${-SZ/2}" width="${SZ}" height="${SZ}" fill="none" pointer-events="all"/>
+    return `<g class="sym${sel}${wp}${asg}${ms}${lk?' lk':''}" data-uid="${p.uid}"${lk?' data-lk="1"':''} transform="translate(${cx},${cy}) rotate(${p.rot})" style="color:${colorOf(p.type)}">
+      <rect x="${-SZ/2}" y="${-SZ/2}" width="${SZ}" height="${SZ}" fill="none" pointer-events="${lk?'none':'all'}"/>
       <rect class="selbox" x="${-SZ/2-4}" y="${-SZ/2-4}" width="${SZ+8}" height="${SZ+8}" rx="4" fill="rgba(226,69,43,.1)" stroke="#E2452B" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
       <circle class="wpendmark" cx="0" cy="0" r="${SZ/2+3}" fill="none" stroke="#26C6DA" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
       <circle class="asgnmark" cx="0" cy="0" r="${SZ/2+2}" fill="none" stroke="#1F9A60" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
       <g transform="translate(${-SZ/2},${-SZ/2})"><use href="#sym-${s.id}"/></g>
     </g>`;
   }).join('');
-  symg.querySelectorAll('.sym').forEach(g=>{
+  symg.querySelectorAll('.sym:not(.lk)').forEach(g=>{
     g.addEventListener('pointerdown',ev=>{
       if(assignMode){ ev.stopPropagation(); toggleAssign(+g.dataset.uid); return; }
       if(layoutMode||calibMode||curTool||textMode||mselMode) return; // 各モード中は stage に委譲（対角点タップ・重ね置き・矩形開始・文字配置）
@@ -1148,6 +1263,7 @@ function renderSel(){
   el('sel-step').value=copyStep;
   el('sel-stepunit').textContent=(mmPerPx!=null)?'間隔mm':'間隔px';
   el('sel-assign').style.display=(symById(p.type)&&symById(p.type).cat==='スイッチ')?'':'none';
+  syncLayerSelects();   // この記号のレイヤーを選択状態に
 }
 document.getElementById('sel-rotL').onclick=()=>rotateSel(-15);
 document.getElementById('sel-rotR').onclick=()=>rotateSel(15);
@@ -1173,8 +1289,9 @@ function applyDrawSnap(s){
   uidSeq=st.uidSeq||(placed.reduce((m,p)=>Math.max(m,p.uid||0),0)+1);
   roomSeq=st.roomSeq||1; wireSeq=st.wireSeq||1; typeColors=st.typeColors||{};
   textSeq=st.textSeq||(texts.reduce((m,t)=>Math.max(m,t.uid||0),0)+1);
+  placed.forEach(p=>{ if(!p.layer||!findLayer(p.layer)) p.layer=layerForType(p.type); });   // 履歴間で欠損/消えたレイヤーは種別へ
   selUid=null;
-  refreshAllPaletteColors(); renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar();
+  refreshAllPaletteColors(); renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); renderLayers();
 }
 function pushHistory(){
   const s=snapDraw();
@@ -1206,7 +1323,7 @@ document.addEventListener('keydown',ev=>{ const t=ev.target; if(t&&(/^(INPUT|TEX
 function duplicateSel(){
   if(assignMode) return;
   const p=placed.find(x=>x.uid===selUid); if(!p) return;
-  const uid=pushSymbol(p.type, p.x+28, p.y+28, {rot:p.rot});   // controlsは引き継がない
+  const uid=pushSymbol(p.type, p.x+28, p.y+28, {rot:p.rot, layer:p.layer});   // controlsは引き継がない
   selUid=uid; renderSyms(); renderSel(); renderTally(); pushHistory();
 }
 el('sel-dup').onclick=duplicateSel;
@@ -1217,7 +1334,7 @@ function copyDir(dx,dy){
   if(assignMode) return;                     // 割当中はコピー無効（選択の乖離防止）
   const p=placed.find(x=>x.uid===selUid); if(!p)return;
   const stepPx=(mmPerPx!=null)?(copyStep/mmPerPx):copyStep;
-  const meta={rot:p.rot};                    // controlsは引き継がない（複製スイッチの二重結線を防止＝未割当で最寄り結線）
+  const meta={rot:p.rot, layer:p.layer};     // controlsは引き継がない（複製スイッチの二重結線を防止＝未割当で最寄り結線）。レイヤーは引き継ぐ
   const nx=p.x+dx*stepPx, ny=p.y+dy*stepPx;
   const uid=pushSymbol(p.type,nx,ny,meta);
   selUid=uid; renderSyms(); renderSel(); renderTally(); pushHistory();
@@ -1274,6 +1391,8 @@ function textW(t){ let w=0; for(const ch of t.text) w+=(ch.codePointAt(0)>0xFF?1
 function textTransform(t){ return `translate(${t.x},${t.y}) rotate(${t.rot||0})`; }
 function renderTexts(){
   if(!textg) return;
+  if(!layerVisible('text')){ textg.innerHTML=''; renderTselbar(); return; }   // 文字レイヤー非表示
+  const tlk=layerLocked('text');
   textg.innerHTML=texts.map(t=>{
     const sel=(t.uid===selTextUid)?' sel':'';
     const w=Math.max(textW(t), t.size);
@@ -1282,7 +1401,7 @@ function renderTexts(){
       <text x="0" y="0" font-size="${t.size}" fill="${t.color||'#E8EAF0'}" text-anchor="middle" dominant-baseline="central" font-family="sans-serif">${escHtml(t.text)}</text>
     </g>`;
   }).join('');
-  textg.querySelectorAll('.anno').forEach(g=>{
+  if(!tlk) textg.querySelectorAll('.anno').forEach(g=>{   // ロック中は選択・移動不可
     g.addEventListener('pointerdown',ev=>{
       if(calibMode||layoutMode||curTool||textMode||mselMode||wireMode||assignMode) return;  // モード中はstageへ委譲
       ev.stopPropagation();
@@ -1328,7 +1447,7 @@ function mselRubber(a,b){
 }
 function mselFinish(a,b){
   const x0=Math.min(a.x,b.x), y0=Math.min(a.y,b.y), x1=Math.max(a.x,b.x), y1=Math.max(a.y,b.y);
-  selSet=placed.filter(p=>p.x>=x0&&p.x<=x1&&p.y>=y0&&p.y<=y1).map(p=>p.uid);
+  selSet=placed.filter(p=>layerSelectable(p.layer)&&p.x>=x0&&p.x<=x1&&p.y>=y0&&p.y<=y1).map(p=>p.uid);
   mselCancel();
   renderSyms(); renderMselbar();
   if(selSet.length) setHint(`<b>${selSet.length}個選択中：</b>選択中のシンボルをドラッグで一括移動。下のバーで一括操作。空白タップで解除。`);
@@ -1814,6 +1933,8 @@ function wireLabelInfo(w){
 }
 function renderWires(){
   if(!wireg) return;
+  if(!layerVisible('wire')){ wireg.innerHTML=''; return; }   // 配線レイヤー非表示
+  const wlk=layerLocked('wire');
   let labels='';
   wireg.innerHTML=wires.map(w=>{
     const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
@@ -1824,7 +1945,7 @@ function renderWires(){
     return `<polyline class="wirehit" data-uid="${w.uid}" points="${pts}" fill="none" stroke="#000" stroke-opacity="0" stroke-width="16" pointer-events="stroke" vector-effect="non-scaling-stroke"/>`+
            `<polyline class="wire" points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
   }).join('')+labels;
-  wireg.querySelectorAll('.wirehit').forEach(ln=>{
+  if(!wlk) wireg.querySelectorAll('.wirehit').forEach(ln=>{   // ロック中は削除タップ無効
     ln.addEventListener('pointerdown',ev=>{ if(!wireMode) return; ev.stopPropagation(); deleteWire(+ln.dataset.uid); });
   });
 }
@@ -2444,6 +2565,7 @@ function buildCadEntities(){
 
   for(const p of placed){
     const s=symById(p.type); if(!s) continue;
+    if(!layerVisible(p.layer)) continue;                    // 非表示レイヤーは書き出さない（画面と一致）
     const [lname,lidx]=CAD_CAT_LAYER[s.cat]||['ETC',7];
     const col=7;
     const rot=(p.rot||0)*Math.PI/180, cs=Math.cos(rot), sn=Math.sin(rot);
@@ -2489,7 +2611,7 @@ function buildCadEntities(){
       }
     }
   }
-  for(const w of wires){
+  for(const w of (layerVisible('wire')?wires:[])){          // 配線レイヤー非表示なら書き出さない
     const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
     if(!a||!b) continue;
     const c=w.circuit?((w.circuit-1)%8)+1:7;
@@ -2501,7 +2623,7 @@ function buildCadEntities(){
     }
   }
   // 自由注記（画面は中央アンカー＝CADはベースライン。中央から0.35size下をベースラインとして一致させる）
-  for(const t of texts){
+  for(const t of (layerVisible('text')?texts:[])){          // 文字レイヤー非表示なら書き出さない
     const wpx=t.size*CAD_TEXT_ASPECT*[...t.text].length;
     const rot=(t.rot||0)*Math.PI/180, cs=Math.cos(rot), sn=Math.sin(rot);
     const P=(u,v)=>[ (t.x+u*cs-v*sn)*mm, -(t.y+u*sn+v*cs)*mm ];
@@ -2581,10 +2703,10 @@ function printScale(vw,vh){  // canvas面積上限（iOS Safari≒16.7MP）か�
 }
 function buildPrintSVG(){
   const rc=printRect();
-  // 下敷き：ラスタは画像、ベクター(DXF/JWW)は #baseg のSVGを黒で合成
-  const img=baseSrc?`<image href="${baseSrc}" x="0" y="0" width="${baseW}" height="${baseH}"/>`
-    :(baseVec?`<g style="color:#333" opacity="${baseOpacity}">${baseg.innerHTML}</g>`:'');
-  const wl=wires.map(w=>{
+  // 下敷き：ラスタは画像、ベクター(DXF/JWW)は #baseg のSVGを黒で合成（下敷きレイヤー非表示なら省く）
+  const img=!layerVisible('base') ? '' : (baseSrc?`<image href="${baseSrc}" x="0" y="0" width="${baseW}" height="${baseH}"/>`
+    :(baseVec?`<g style="color:#333" opacity="${baseOpacity}">${baseg.innerHTML}</g>`:''));
+  const wl=(layerVisible('wire')?wires:[]).map(w=>{
     const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
     if(!a||!b) return '';
     const pts=wirePath(a,b).map(q=>q.join(',')).join(' ');
@@ -2594,9 +2716,10 @@ function buildPrintSVG(){
   }).join('');
   const uses=placed.map(p=>{
     const s=symById(p.type); if(!s) return '';
+    if(!layerVisible(p.layer)) return '';                   // 非表示レイヤーは印刷しない
     return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(colorOf(p.type))}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
   }).join('');
-  const tl=texts.map(t=>`<g transform="${textTransform(t)}"><text x="0" y="0" font-size="${t.size}" fill="${printInk(t.color||'#E8EAF0')}" text-anchor="middle" dominant-baseline="central" font-family="sans-serif">${escHtml(t.text)}</text></g>`).join('');
+  const tl=(layerVisible('text')?texts:[]).map(t=>`<g transform="${textTransform(t)}"><text x="0" y="0" font-size="${t.size}" fill="${printInk(t.color||'#E8EAF0')}" text-anchor="middle" dominant-baseline="central" font-family="sans-serif">${escHtml(t.text)}</text></g>`).join('');
   const frame=(el('exp-frame')&&el('exp-frame').checked)?buildTitleBlockSVG(rc):'';
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rc.vx} ${rc.vy} ${rc.vw} ${rc.vh}" width="${rc.vw}" height="${rc.vh}">`
     +`<rect x="${rc.vx}" y="${rc.vy}" width="${rc.vw}" height="${rc.vh}" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}${tl}${frame}</svg>`;
@@ -2623,8 +2746,8 @@ function buildTitleBlockSVG(rc){
     g+=`<text x="${tbX+tbW*0.14}" y="${ry+fs*1.15}" font-size="${fsS}" text-anchor="middle" fill="#333">${esc(r[0])}</text>`;
     g+=`<text x="${tbX+tbW*0.31}" y="${ry+fs*1.15}" font-size="${fs}" font-weight="700">${esc(r[1])}</text>`;
   });
-  // 凡例表（左下）：使用した記号＋個数
-  const counts={}; placed.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
+  // 凡例表（左下）：使用した記号＋個数（印刷される＝表示レイヤーのみ計上）
+  const counts={}; placed.forEach(p=>{ if(layerVisible(p.layer)) counts[p.type]=(counts[p.type]||0)+1; });
   const used=SYMBOLS.filter(s=>counts[s.id]);
   if(used.length){
     const rh=fs*1.7, lgW=Math.min(rc.vw*0.34, 66*S), lgH=(used.length+1)*rh, lgX=x0+S*0.8, lgY=y1-S*0.8-lgH;
@@ -2715,12 +2838,13 @@ function renderTally(){
   ).join('');
   document.getElementById('tallybody').innerHTML=
     `<table class="tly">${rows||'<tr class="empty"><td colspan="2">まだ配置がありません。<br>左のシンボルを選んで図面に置いてください。</td></tr>'}</table>`;
+  renderLayers();   // レイヤー別の個数も更新
 }
 
 // ============ 保存/読込/出力 ============
 // 現在の全状態を1オブジェクトに（ファイル/ブラウザ内保存 共通）
 function buildState(){
-  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels, bgInvert};
+  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels, bgInvert, layers};
 }
 // 状態オブジェクトを適用（ファイル読込・ブラウザ内保存の復元 共通）
 function applyState(st){
@@ -2728,7 +2852,9 @@ function applyState(st){
   if(assignMode) endAssign();
   if(textMode) endTextMode();
   mselCancel(); selSet=[]; selTextUid=null;
+  layers=normalizeLayers(st.layers);                                   // レイヤー復元（旧保存は既定レイヤー）
   placed=st.placed||[]; uidSeq=st.uidSeq||(placed.reduce((m,p)=>Math.max(m,p.uid||0),0)+1); mmPerPx=st.mmPerPx||null;
+  placed.forEach(p=>{ if(!p.layer||!findLayer(p.layer)) p.layer=layerForType(p.type); });   // 旧保存/欠損は種別で振分
   rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
   wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
   texts=st.texts||[]; textSeq=st.textSeq||(texts.reduce((m,t)=>Math.max(m,t.uid||0),0)+1);
@@ -2745,7 +2871,8 @@ function applyState(st){
   document.getElementById('uploader').style.display='none';
   if(!vec) document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
   refreshAllPaletteColors();
-  selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); updateSnapUI(); fitView();
+  applyBaseLayer();
+  selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); renderLayers(); updateSnapUI(); fitView();
   resetHistory();
 }
 // ファイル書き出し（バックアップ／別端末移動用）
@@ -2859,7 +2986,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.15', APP_DATE='2026-07-08';
+const APP_VERSION='0.16', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
