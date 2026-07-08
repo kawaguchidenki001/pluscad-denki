@@ -99,6 +99,16 @@
   #selbar input.step,#mselbar input.step,#tselbar input.step{width:56px;height:32px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;border-radius:7px;text-align:right;font-family:var(--mono);font-size:12px;padding:0 6px}
   #selbar button.dir,#mselbar button.dir,#tselbar button.dir{width:32px;height:32px;font-size:16px}
   #mselbar button.wd,#tselbar button.wd{width:auto;padding:0 9px;font-size:12px;font-weight:700}
+  /* 作図線バー（selbar系と同じ見た目） */
+  #linebar,#freebar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:7;display:none;
+    max-width:calc(100vw - 20px);flex-wrap:wrap;justify-content:center;
+    background:rgba(20,22,28,.96);border:1px solid var(--panel-line);border-radius:11px;padding:7px 9px;gap:7px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+  #linebar.show,#freebar.show{display:flex}
+  #linebar .lbl,#freebar .lbl{font-size:12px;color:#fff;font-weight:700;font-family:var(--jp);padding:0 6px 0 2px}
+  #linebar button,#freebar button{background:var(--panel2);border:1px solid var(--panel-line);color:var(--txt);border-radius:8px;width:36px;height:34px;font-size:15px;cursor:pointer;font-family:var(--jp)}
+  #linebar button:hover,#freebar button:hover{background:var(--panel3)}
+  #linebar button.wd,#freebar button.wd{width:auto;padding:0 11px;font-size:12px;font-weight:700}
+  #linebar button.del,#freebar button.del{color:#f0a9a0;border-color:#5a3a36}
 
   /* ---- 右：集計 ---- */
   #tally{width:280px;flex:none;background:var(--panel);border-left:1px solid var(--panel-line);color:var(--txt);display:flex;flex-direction:column}
@@ -322,6 +332,7 @@
     <button id="btn-wire">手動配線</button>
     <button id="btn-msel">範囲選択</button>
     <button id="btn-text">文字</button>
+    <button id="btn-line" title="自由線（連続線）を作図：タップで頂点を置き「確定」で線を確定">作図線</button>
     <button id="btn-snap" title="グリッドに吸着（配置・移動・整列がきれいに揃う）">スナップ</button>
     <button id="btn-esnap" title="読取点スナップ：DXF/JWW下敷きの線の端点・角・中心や配置済み記号に吸着（正確なトレース向け）">読取点</button>
     <span class="pdfdim" id="gridwrap" style="display:none"><span>間隔</span><input id="grid-mm" type="number" min="1" step="5" value="455" style="width:56px;height:24px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;border-radius:6px;text-align:right;font-family:var(--mono);font-size:12px;padding:0 4px"><span id="grid-unit">mm</span></span>
@@ -364,6 +375,7 @@
           <g id="gridg"></g>
           <g id="calibg"></g>
           <g id="layoutg"></g>
+          <g id="freeg"></g>
           <g id="wireg"></g>
           <g id="symg"></g>
           <g id="textg"></g>
@@ -424,6 +436,16 @@
         <button id="tsel-rotR" title="右回転">⟳</button>
         <div class="grp" title="文字色"><span class="lbl2">色</span><input id="tsel-color" class="color" type="color"></div>
         <button id="tsel-del" class="del" title="削除">🗑</button>
+      </div>
+      <div id="linebar">
+        <span class="lbl" id="line-lbl">作図線</span>
+        <button id="line-ok" class="wd" title="この線を確定">確定</button>
+        <button id="line-undo1" class="wd" title="直前の頂点を取消">1つ戻す</button>
+        <button id="line-cancel" title="作図を取消">✕</button>
+      </div>
+      <div id="freebar">
+        <span class="lbl">作図線</span>
+        <button id="free-del" class="del" title="削除">🗑</button>
       </div>
 
       <!-- 自動配灯 設定パネル（Step B） -->
@@ -764,6 +786,13 @@ let texts = [];            // {uid,x,y,text,size,rot,color} 自由注記
 let textSeq = 1;
 let textMode = false;      // 文字配置モード
 let selTextUid = null;     // 選択中の注記uid
+// 自由線（作図線）v0.21：連続線ポリライン。pts=world座標の配列。全て'draw'レイヤー。
+let freelines = [];        // {uid, pts:[[x,y],...]}
+let freeSeq = 1;
+let lineMode = false;      // 作図線モード
+let lineDraft = [];        // 作図中の頂点列(world)
+let lineCursor = null;     // ラバーバンドの現在カーソル(world)
+let selFreeUid = null;     // 選択中の作図線
 let textDrag = null;       // 注記ドラッグ {t,moved}
 let selSet = [];           // 複数選択（シンボルuid配列）
 let mselMode = false;      // 範囲選択モード（矩形1回で自動終了）
@@ -780,6 +809,7 @@ const DEFAULT_LAYERS = [
   {id:'conn',    name:'配線・接続材'},
   {id:'wire',    name:'配線'},
   {id:'text',    name:'文字・注記'},
+  {id:'draw',    name:'作図線'},
 ];
 const CAT_LAYER = {'照明':'lighting','コンセント':'outlet','スイッチ':'switch','盤・機器':'power','弱電・防災':'weak','配線・接続':'conn'};
 let layers = DEFAULT_LAYERS.map(L=>({id:L.id,name:L.name,visible:true,locked:false}));  // 表示状態は保存対象・履歴には積まない
@@ -812,6 +842,7 @@ const gridg=document.getElementById('gridg');
 const baseg=document.getElementById('baseg');
 const mselg=document.getElementById('mselg');
 const snapg=document.getElementById('snapg');
+const freeg=document.getElementById('freeg');
 const baseimg=document.getElementById('baseimg');
 const baseEl=document.getElementById('base');
 
@@ -869,6 +900,7 @@ function setTool(id){
   if(wireMode) endWireMode();
   if(assignMode) endAssign();
   if(textMode) endTextMode();
+  if(lineMode) endLineMode();
   mselCancel();
   if(selSet.length){ mselClear(); renderSyms(); }   // 青枠の消し忘れ防止
   if(selTextUid!=null){ selTextUid=null; renderTexts(); }
@@ -913,6 +945,7 @@ function esnapNearest(x,y){
   for(const p of placed){ if(!layerVisible(p.layer)) continue; if(dragSym&&p.uid===dragSym.uid) continue;   // 自分自身には吸着しない
     const dx=p.x-x, dy=p.y-y, d=dx*dx+dy*dy; if(d<bd){ bd=d; best={x:p.x,y:p.y}; } }
   if(layerVisible('base')) for(let i=0;i<vecSnapPts.length;i++){ const s=vecSnapPts[i], dx=s.x-x, dy=s.y-y, d=dx*dx+dy*dy; if(d<bd){ bd=d; best=s; } }
+  if(layerVisible('draw')) for(const f of freelines) for(const p of f.pts){ const dx=p[0]-x, dy=p[1]-y, d=dx*dx+dy*dy; if(d<bd){ bd=d; best={x:p[0],y:p[1]}; } }   // 作図線の頂点も読取点
   return best;
 }
 function showSnapMark(x,y){ if(!snapg) return; const R=6;
@@ -973,7 +1006,7 @@ function applyBaseLayer(){ const v=layerVisible('base'); if(baseimg) baseimg.sty
 // ── レイヤーパネル（v0.16） ──
 function layerCounts(){
   const c={}; placed.forEach(p=>{ const id=findLayer(p.layer)?p.layer:layerForType(p.type); c[id]=(c[id]||0)+1; });
-  c.wire=(c.wire||0)+wires.length; c.text=(c.text||0)+texts.length; c.base=(baseSrc||baseVec)?1:0;
+  c.wire=(c.wire||0)+wires.length; c.text=(c.text||0)+texts.length; c.base=(baseSrc||baseVec)?1:0; c.draw=freelines.length;
   return c;
 }
 // 記号の移動先候補＝下敷き/配線/文字を除く（それらは固定レイヤー）
@@ -1289,7 +1322,7 @@ function renderSyms(){
   symg.querySelectorAll('.sym:not(.lk)').forEach(g=>{
     g.addEventListener('pointerdown',ev=>{
       if(assignMode){ ev.stopPropagation(); toggleAssign(+g.dataset.uid); return; }
-      if(layoutMode||calibMode||curTool||textMode||mselMode) return; // 各モード中は stage に委譲（対角点タップ・重ね置き・矩形開始・文字配置）
+      if(layoutMode||calibMode||curTool||textMode||mselMode||lineMode) return; // 各モード中は stage に委譲（対角点タップ・重ね置き・矩形開始・文字/作図線）
       if(wireMode){ ev.stopPropagation(); handleWireSymTap(+g.dataset.uid); return; }
       ev.stopPropagation();
       if(selSet.includes(+g.dataset.uid)){ startGroupDrag(ev); return; }   // 複数選択中の記号→一括ドラッグ
@@ -1327,18 +1360,19 @@ function refreshAllPaletteColors(){ document.querySelectorAll('.palbtn').forEach
 
 // ============ 履歴（戻る/進む Undo/Redo） ============
 let history=[], histIdx=-1; const HIST_MAX=60;
-function snapDraw(){ return JSON.stringify({placed,rooms,wires,texts,uidSeq,roomSeq,wireSeq,textSeq,typeColors}); }
+function snapDraw(){ return JSON.stringify({placed,rooms,wires,texts,freelines,uidSeq,roomSeq,wireSeq,textSeq,freeSeq,typeColors}); }
 function applyDrawSnap(s){
   if(assignMode) endAssign();
-  mselCancel(); wirePendA=null; selSet=[]; selTextUid=null;
+  mselCancel(); wirePendA=null; selSet=[]; selTextUid=null; selFreeUid=null;
   const st=JSON.parse(s);
-  placed=st.placed||[]; rooms=st.rooms||[]; wires=st.wires||[]; texts=st.texts||[];
+  placed=st.placed||[]; rooms=st.rooms||[]; wires=st.wires||[]; texts=st.texts||[]; freelines=st.freelines||[];
   uidSeq=st.uidSeq||(placed.reduce((m,p)=>Math.max(m,p.uid||0),0)+1);
   roomSeq=st.roomSeq||1; wireSeq=st.wireSeq||1; typeColors=st.typeColors||{};
   textSeq=st.textSeq||(texts.reduce((m,t)=>Math.max(m,t.uid||0),0)+1);
+  freeSeq=st.freeSeq||(freelines.reduce((m,f)=>Math.max(m,f.uid||0),0)+1);
   placed.forEach(p=>{ if(!p.layer||!findLayer(p.layer)) p.layer=layerForType(p.type); });   // 履歴間で欠損/消えたレイヤーは種別へ
   selUid=null;
-  refreshAllPaletteColors(); renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); renderLayers();
+  refreshAllPaletteColors(); renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); renderLayers(); renderFree(); renderFreebar();
 }
 function pushHistory(){
   const s=snapDraw();
@@ -1355,11 +1389,15 @@ function updateUndoRedo(){ const u=el('btn-undo'),r=el('btn-redo'); if(u) u.disa
 el('btn-undo').onclick=undo; el('btn-redo').onclick=redo;
 document.addEventListener('keydown',ev=>{ const t=ev.target; if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable)) return;
   if((ev.ctrlKey||ev.metaKey)&&!ev.altKey){ const k=ev.key.toLowerCase(); if(k==='z'&&!ev.shiftKey){ ev.preventDefault(); undo(); } else if(k==='y'||(k==='z'&&ev.shiftKey)){ ev.preventDefault(); redo(); } return; }
+  if(lineMode && (ev.key==='Enter')){ ev.preventDefault(); commitLine(); return; }   // Enterで作図線を確定
   if(ev.key==='Delete'||ev.key==='Backspace'){
-    if(selSet.length){ ev.preventDefault(); el('msel-del').click(); }
+    if(lineMode && lineDraft.length){ ev.preventDefault(); lineDraft.pop(); updateLinebar(); renderFree(); }
+    else if(selSet.length){ ev.preventDefault(); el('msel-del').click(); }
     else if(selUid!=null){ ev.preventDefault(); el('sel-del').click(); }
     else if(selTextUid!=null){ ev.preventDefault(); el('tsel-del').click(); }
+    else if(selFreeUid!=null){ ev.preventDefault(); el('free-del').click(); }
   } else if(ev.key==='Escape'){
+    if(lineMode){ if(lineDraft.length){ lineDraft=[]; lineCursor=null; updateLinebar(); renderFree(); } else endLineMode(); }
     if(mselMode) mselCancel();
     if(textMode) endTextMode();
     if(selSet.length){ mselClear(); renderSyms(); }
@@ -1450,7 +1488,7 @@ function renderTexts(){
   }).join('');
   if(!tlk) textg.querySelectorAll('.anno').forEach(g=>{   // ロック中は選択・移動不可
     g.addEventListener('pointerdown',ev=>{
-      if(calibMode||layoutMode||curTool||textMode||mselMode||wireMode||assignMode) return;  // モード中はstageへ委譲
+      if(calibMode||layoutMode||curTool||textMode||mselMode||wireMode||assignMode||lineMode) return;  // モード中はstageへ委譲
       ev.stopPropagation();
       selTextUid=+g.dataset.uid; selUid=null; mselClear();
       renderSyms(); renderSel(); renderTexts();
@@ -1475,6 +1513,53 @@ el('tsel-rotR').onclick=()=>{ const t=tselT(); if(!t)return; t.rot=((t.rot||0)+1
 el('tsel-color').addEventListener('input',e=>{ const t=tselT(); if(!t)return; t.color=e.target.value; renderTexts(); });
 el('tsel-color').addEventListener('change',()=>{ if(tselT()) pushHistory(); });
 el('tsel-del').onclick=()=>{ if(selTextUid==null)return; texts=texts.filter(t=>t.uid!==selTextUid); selTextUid=null; renderTexts(); pushHistory(); };
+
+// ============ 自由線（作図線）v0.21 ============
+el('btn-line').onclick=()=>{ lineMode?endLineMode():startLineMode(); };
+function startLineMode(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(calibMode) endCalib();
+  setTool(null);                          // 他モードは setTool 内で解除
+  lineMode=true; lineDraft=[]; lineCursor=null; selFreeUid=null;
+  el('btn-line').classList.add('on'); stage.classList.add('placing');
+  updateLinebar(); renderFree(); renderFreebar();
+  setHint('<b>作図線：</b>頂点をタップで連続線を作図。「確定」で線を確定、「1つ戻す」で直前の点を取消、✕で中止。読取点/スナップも有効。');
+}
+function endLineMode(){ lineMode=false; lineDraft=[]; lineCursor=null; hideSnapMark(); el('btn-line').classList.remove('on'); if(!curTool) stage.classList.remove('placing'); el('linebar').classList.remove('show'); renderFree(); setHint('左のシンボルを選ぶ→図面をタップで配置。'); }
+function lineAddVertex(x,y){ lineDraft.push([Math.round(x),Math.round(y)]); updateLinebar(); renderFree(); }
+function commitLine(){ if(lineDraft.length>=2){ freelines.push({uid:freeSeq++, pts:lineDraft.slice()}); renderTally(); pushHistory(); } lineDraft=[]; lineCursor=null; updateLinebar(); renderFree(); }
+function updateLinebar(){ const bar=el('linebar'); if(!bar) return; if(!lineMode){ bar.classList.remove('show'); return; }
+  bar.classList.add('show'); el('line-lbl').textContent='作図線 '+(lineDraft.length?`${lineDraft.length}点`:'（頂点をタップ）');
+  el('line-ok').disabled=lineDraft.length<2; el('line-undo1').disabled=lineDraft.length===0; }
+el('line-ok').onclick=()=>commitLine();
+el('line-undo1').onclick=()=>{ if(lineDraft.length){ lineDraft.pop(); updateLinebar(); renderFree(); } };
+el('line-cancel').onclick=()=>{ lineDraft=[]; lineCursor=null; updateLinebar(); renderFree(); };
+function renderFree(){
+  if(!freeg) return;
+  const vis=layerVisible('draw'), lk=layerLocked('draw');
+  let h='';
+  if(vis) for(const f of freelines){
+    const d='M '+f.pts.map(p=>p.join(' ')).join(' L ');
+    const sel=(f.uid===selFreeUid);
+    h+=`<path class="freehit" data-uid="${f.uid}" d="${d}" fill="none" stroke="#000" stroke-opacity="0" stroke-width="14" pointer-events="stroke" vector-effect="non-scaling-stroke"/>`
+      +`<path class="free" d="${d}" fill="none" stroke="${sel?'#E2452B':'#c9d2de'}" stroke-width="${sel?2.6:1.6}" vector-effect="non-scaling-stroke"/>`;
+  }
+  if(lineMode && lineDraft.length){                          // 作図中ドラフト＋ラバーバンド（非表示レイヤーでも見せる）
+    const d0='M '+lineDraft.map(p=>p.join(' ')).join(' L ');
+    h+=`<path d="${d0}" fill="none" stroke="#26C6DA" stroke-width="1.8" vector-effect="non-scaling-stroke"/>`;
+    lineDraft.forEach(p=>h+=`<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#26C6DA"/>`);
+    const last=lineDraft[lineDraft.length-1];
+    if(lineCursor) h+=`<line x1="${last[0]}" y1="${last[1]}" x2="${lineCursor[0]}" y2="${lineCursor[1]}" stroke="#26C6DA" stroke-opacity=".6" stroke-dasharray="5 4" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+  }
+  freeg.innerHTML=h;
+  if(vis && !lk && !lineMode) freeg.querySelectorAll('.freehit').forEach(ln=>{
+    ln.addEventListener('pointerdown',ev=>{ if(curTool||calibMode||layoutMode||wireMode||textMode||mselMode||assignMode) return;
+      ev.stopPropagation(); selFreeUid=+ln.dataset.uid; selUid=null; selTextUid=null; mselClear();
+      renderSyms(); renderSel(); renderTexts(); renderFree(); renderFreebar(); }); });
+}
+function renderFreebar(){ const bar=el('freebar'); if(!bar) return; const f=freelines.find(x=>x.uid===selFreeUid);
+  if(!f||lineMode){ bar.classList.remove('show'); return; } bar.classList.add('show'); }
+el('free-del').onclick=()=>{ if(selFreeUid==null)return; freelines=freelines.filter(f=>f.uid!==selFreeUid); selFreeUid=null; renderFree(); renderFreebar(); renderTally(); pushHistory(); };
 
 // ============ 複数選択（範囲選択→一括操作） ============
 function mselClear(){ if(selSet.length) selSet=[]; renderMselbar(); }
@@ -1562,6 +1647,10 @@ stage.addEventListener('pointerdown',ev=>{
     const w=toWorld(ev.clientX,ev.clientY), sp=snapPt(w.x,w.y);
     addTextAt(sp.x,sp.y); return;
   }
+  if(lineMode){ // 作図線：頂点を追加（読取点/グリッド吸着）
+    const w=toWorld(ev.clientX,ev.clientY), sp=snapPt(w.x,w.y);
+    lineAddVertex(sp.x,sp.y); return;
+  }
   // 割当中：照明タップはsym側。空白はパン可（下のpointerupで選択解除しない）。curToolはnullなので配置には落ちない。
   if(wireMode && wirePendA!=null){ wirePendA=null; renderSyms(); } // 空白タップで結線1点目を解除（パンは継続）
   if(curTool){ // 配置モード：置く（スナップ有効時は格子に吸着）
@@ -1579,6 +1668,7 @@ stage.addEventListener('pointermove',ev=>{
   if(curTool && esnapOn && !dragSym && !groupDrag && !panStart && !mselStart && !textDrag){   // 配置前プレビュー：読取点マーカー
     const w=toWorld(ev.clientX,ev.clientY); snapPt(w.x,w.y);
   }
+  if(lineMode && !panStart){ const w=toWorld(ev.clientX,ev.clientY), sp=snapPt(w.x,w.y); lineCursor=[sp.x,sp.y]; renderFree(); return; }
   if(layoutMode){ if(layoutPts.length===1 && !layoutDraft) drawRubber(toWorld(ev.clientX,ev.clientY)); return; }
   if(mselStart){ mselRubber(mselStart,toWorld(ev.clientX,ev.clientY)); return; }
   if(textDrag){
@@ -1610,7 +1700,7 @@ stage.addEventListener('pointerup',ev=>{
   if(groupDrag){ if(groupDrag.moved){ renderTally(); renderWireInfo(); pushHistory(); } groupDrag=null; return; }
   if(dragSym){ dragSym=null; renderTally(); if(dragMoved){ renderWireInfo(); pushHistory(); } }
   if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y);
-    if(moved<4 && !assignMode){ selUid=null; if(selTextUid!=null){ selTextUid=null; renderTexts(); } mselClear(); renderSyms(); renderSel(); }
+    if(moved<4 && !assignMode){ selUid=null; if(selTextUid!=null){ selTextUid=null; renderTexts(); } if(selFreeUid!=null){ selFreeUid=null; renderFree(); renderFreebar(); } mselClear(); renderSyms(); renderSel(); }
     panStart=null; stage.classList.remove('panning'); }
 });
 function startDragSym(ev,uid){
@@ -2521,6 +2611,7 @@ function exportEstimateXLSX(){
 const CAD_CAT_LAYER={ '照明':['LIGHT',0], 'コンセント':['OUTLET',1], 'スイッチ':['SWITCH',2],
   '盤・機器':['PANEL',3], '弱電・防災':['ALARM',4], '配線・接続':['BOX',5] };
 const CAD_WIRE_LAYER=['WIRE',6];
+const CAD_DRAW_LAYER=['DRAW',9];   // 作図線（自由線）
 const CAD_TEXT_ASPECT=0.62;   // 文字幅/高さの概算比
 const CAD_FILL_SEGS=16;       // 塗り円の扇形分割数
 
@@ -2692,6 +2783,10 @@ function buildCadEntities(){
       if(ltName && ltName!=='CONTINUOUS') ents[ents.length-1].lt=ltName;   // 実線以外だけ線種を付与
     }
   }
+  for(const f of (layerVisible('draw')?freelines:[])){       // 作図線（非表示レイヤーは書き出さない）
+    for(let i=0;i<f.pts.length-1;i++){ const [x1,y1]=f.pts[i], [x2,y2]=f.pts[i+1]; if(x1===x2&&y1===y2) continue;
+      addLine(x1*mm,-y1*mm,x2*mm,-y2*mm,CAD_DRAW_LAYER[0],CAD_DRAW_LAYER[1],7); }
+  }
   // 自由注記（画面は中央アンカー＝CADはベースライン。中央から0.35size下をベースラインとして一致させる）
   for(const t of (layerVisible('text')?texts:[])){          // 文字レイヤー非表示なら書き出さない
     const wpx=t.size*CAD_TEXT_ASPECT*[...t.text].length;
@@ -2711,7 +2806,7 @@ function buildCadEntities(){
 function dxfBytesFromEnts(ents,min,max){
   const w=new window.JwwToDxf.DxfWriter();
   const used=new Set(ents.map(e=>e.lname));
-  ['LIGHT','OUTLET','SWITCH','PANEL','ALARM','BOX','WIRE','TEXT','ETC'].forEach(n=>{ if(used.has(n)) w.addLayer(n,7); });
+  ['LIGHT','OUTLET','SWITCH','PANEL','ALARM','BOX','WIRE','DRAW','TEXT','ETC'].forEach(n=>{ if(used.has(n)) w.addLayer(n,7); });
   const sx=-min.x, sy=-min.y;
   w.writeHeader([0,0],[max.x-min.x,max.y-min.y]);
   w.writeTables(); w.writeBlocks();
@@ -2765,6 +2860,7 @@ function printRect(){  // 用紙範囲∪配置範囲（回転40×40シンボル
   const M=28;
   placed.forEach(p=>{ x0=Math.min(x0,p.x-M); x1=Math.max(x1,p.x+M); y0=Math.min(y0,p.y-M); y1=Math.max(y1,p.y+M); });
   texts.forEach(t=>{ const m=textW(t)/2+t.size; x0=Math.min(x0,t.x-m); x1=Math.max(x1,t.x+m); y0=Math.min(y0,t.y-m); y1=Math.max(y1,t.y+m); });
+  freelines.forEach(f=>f.pts.forEach(p=>{ x0=Math.min(x0,p[0]); x1=Math.max(x1,p[0]); y0=Math.min(y0,p[1]); y1=Math.max(y1,p[1]); }));
   return {vx:Math.floor(x0), vy:Math.floor(y0), vw:Math.ceil(x1-x0), vh:Math.ceil(y1-y0)};
 }
 function printScale(vw,vh){  // canvas面積上限（iOS Safari≒16.7MP）から逆算して2倍を上限にクランプ
@@ -2790,10 +2886,11 @@ function buildPrintSVG(){
     if(!layerVisible(p.layer)) return '';                   // 非表示レイヤーは印刷しない
     return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(colorOf(p.type))}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
   }).join('');
+  const flg=(layerVisible('draw')?freelines:[]).map(f=>`<path d="M ${f.pts.map(p=>p.join(' ')).join(' L ')}" fill="none" stroke="#333" stroke-width="1.4"/>`).join('');
   const tl=(layerVisible('text')?texts:[]).map(t=>`<g transform="${textTransform(t)}"><text x="0" y="0" font-size="${t.size}" fill="${printInk(t.color||'#E8EAF0')}" text-anchor="middle" dominant-baseline="central" font-family="sans-serif">${escHtml(t.text)}</text></g>`).join('');
   const frame=(el('exp-frame')&&el('exp-frame').checked)?buildTitleBlockSVG(rc):'';
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rc.vx} ${rc.vy} ${rc.vw} ${rc.vh}" width="${rc.vw}" height="${rc.vh}">`
-    +`<rect x="${rc.vx}" y="${rc.vy}" width="${rc.vw}" height="${rc.vh}" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}${tl}${frame}</svg>`;
+    +`<rect x="${rc.vx}" y="${rc.vy}" width="${rc.vw}" height="${rc.vh}" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${flg}${wl}${uses}${tl}${frame}</svg>`;
   return {svg, ...rc};
 }
 // 図枠＋タイトル欄＋凡例表（印刷用。座標は印刷ビュー rc に対する実寸px）
@@ -2842,7 +2939,7 @@ function buildTitleBlockSVG(rc){
 
 function exportGuard(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return false; }
-  if(!placed.length&&!wires.length&&!texts.length){ toast('書き出す配置がありません'); return false; }
+  if(!placed.length&&!wires.length&&!texts.length&&!freelines.length){ toast('書き出す配置がありません'); return false; }
   return true;
 }
 async function exportDXF(){
@@ -2884,7 +2981,7 @@ function printLayout(vw,vh){
 }
 function exportPrint(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開いてください'); return; }
-  if(!placed.length&&!texts.length&&!baseSrc&&!baseVec){ toast('印刷する内容がありません'); return; }
+  if(!placed.length&&!texts.length&&!freelines.length&&!baseSrc&&!baseVec){ toast('印刷する内容がありません'); return; }
   const {svg,vw,vh}=buildPrintSVG();
   const mode=printLayout(vw,vh);
   if(mode.warn==='nocal') toast('縮尺指定の印刷には「縮尺を設定」が必要です。自動フィットで印刷します');
@@ -2941,20 +3038,22 @@ function renderTally(){
 // ============ 保存/読込/出力 ============
 // 現在の全状態を1オブジェクトに（ファイル/ブラウザ内保存 共通）
 function buildState(){
-  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels, bgInvert, layers, esnapOn};
+  return {ver:'alpha-mvp-8', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm, wireLabels, bgInvert, layers, esnapOn, freelines, freeSeq};
 }
 // 状態オブジェクトを適用（ファイル読込・ブラウザ内保存の復元 共通）
 function applyState(st){
   if(wireMode) endWireMode();
   if(assignMode) endAssign();
   if(textMode) endTextMode();
-  mselCancel(); selSet=[]; selTextUid=null;
+  if(lineMode) endLineMode();
+  mselCancel(); selSet=[]; selTextUid=null; selFreeUid=null;
   layers=normalizeLayers(st.layers);                                   // レイヤー復元（旧保存は既定レイヤー）
   placed=st.placed||[]; uidSeq=st.uidSeq||(placed.reduce((m,p)=>Math.max(m,p.uid||0),0)+1); mmPerPx=st.mmPerPx||null;
   placed.forEach(p=>{ if(!p.layer||!findLayer(p.layer)) p.layer=layerForType(p.type); });   // 旧保存/欠損は種別で振分
   rooms=st.rooms||[]; roomSeq=st.roomSeq||(rooms.reduce((m,r)=>Math.max(m,r.rid||0),0)+1);
   wires=st.wires||[]; wireSeq=st.wireSeq||(wires.reduce((m,w)=>Math.max(m,w.uid||0),0)+1);
   texts=st.texts||[]; textSeq=st.textSeq||(texts.reduce((m,t)=>Math.max(m,t.uid||0),0)+1);
+  freelines=st.freelines||[]; freeSeq=st.freeSeq||(freelines.reduce((m,f)=>Math.max(m,f.uid||0),0)+1);
   snapOn=!!st.snapOn; gridMm=st.gridMm||455; wireLabels=!!st.wireLabels; bgInvert=!!st.bgInvert; esnapOn=!!st.esnapOn;
   estimate=st.estimate||defaultEstimate();
   if(estimate.wire && !estimate.wire.circuitSpec) estimate.wire.circuitSpec={};   // 旧保存の後方互換
@@ -2970,7 +3069,7 @@ function applyState(st){
   if(!vec) document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
   refreshAllPaletteColors();
   applyBaseLayer();
-  selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); renderLayers(); updateSnapUI(); fitView();
+  selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); renderLayers(); renderFree(); renderFreebar(); updateSnapUI(); fitView();
   resetHistory();
 }
 // ファイル書き出し（バックアップ／別端末移動用）
@@ -3084,7 +3183,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.20', APP_DATE='2026-07-08';
+const APP_VERSION='0.21', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
@@ -3094,7 +3193,7 @@ document.getElementById('btn-open').onclick=()=>document.getElementById('file-ba
 document.getElementById('btn-save').onclick=saveProject;                 // ブラウザ内に保存
 document.getElementById('btn-load').onclick=openProjModal;               // 保存一覧を開く
 document.getElementById('btn-csv').onclick=exportCSV;
-document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length||texts.length)&&!confirm('配置・配線・注記をすべて消去しますか？'))return; if(assignMode) endAssign(); mselClear(); placed=[]; rooms=[]; wires=[]; texts=[]; selUid=null; selTextUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); pushHistory(); };
+document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length||texts.length||freelines.length)&&!confirm('配置・配線・注記・作図線をすべて消去しますか？'))return; if(assignMode) endAssign(); if(lineMode) endLineMode(); mselClear(); placed=[]; rooms=[]; wires=[]; texts=[]; freelines=[]; selUid=null; selTextUid=null; selFreeUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderFree(); renderFreebar(); pushHistory(); };
 document.getElementById('file-base').addEventListener('change',e=>{ if(e.target.files[0])loadFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('file-load').addEventListener('change',e=>{ if(e.target.files[0])loadState(e.target.files[0]); e.target.value=''; });
 document.getElementById('btn-sample').onclick=()=>{ document.getElementById('uploader').style.display='none'; currentProjId=null; currentProjName=''; setBaseSize(1600,1100); clearBase(); fitView(); resetHistory(); };
