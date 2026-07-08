@@ -1760,8 +1760,11 @@ function autoWire(){
   });
   // 手動配線は端点の新しい回路に追従（回路別集計・色の不整合を防ぐ。両端点から決定的に導出）
   wires.filter(w=>!w.auto).forEach(w=>{ w.circuit=wireCircuitOf(w.a,w.b); });
+  // 回路番号が振り直されるため、回路ごとの線種指定はリセット（古い番号に誤って残ると別回路を誤集計するため）
+  const hadSpec=estimate.wire&&estimate.wire.circuitSpec&&Object.keys(estimate.wire.circuitSpec).length;
+  if(estimate.wire) estimate.wire.circuitSpec={};
   renderSyms(); renderWireInfo(); pushHistory();
-  toast(circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません');
+  toast((circuits.length?`${circuits.length}回路・自動配線 ${wires.filter(w=>w.auto).length}本`:'配線対象（照明/コンセント）がありません')+(hadSpec?'（回路振り直しにつき線種指定はリセット）':''));
 }
 
 // 配線の傍記（線種）ラベル位置＋文字。長い脚の中点に置く。
@@ -1900,7 +1903,6 @@ const SYMMAP={
   riser:null,   // 立上り＝配線付随。品目化しない
 };
 const CABLE_CAT='ケーブル（強電）', CABLE_NAME='ケーブル', CONDUIT_CAT='電線管・ダクト・線ぴ';
-const WIRE_DEF={ lighting:{label:'配線 照明系',spec:'VVF 1.6mm -2C'}, outlet:{label:'配線 コンセント系',spec:'VVF 2.0mm -2C'}, feeder:{label:'配線 電源送り',spec:'VVF 2.0mm -2C'} };
 // 選択できるケーブル（線種・条数）カタログ。specは単価マスタ検索用。
 const CABLE_TYPES=[
   {key:'vvf16_2c',label:'VVF1.6-2C',spec:'VVF 1.6mm -2C'},
@@ -2003,12 +2005,6 @@ function defaultConduitSel(){
   }
   return null;
 }
-function wireGroup(w){
-  if(w.kind==='power') return 'feeder';
-  const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
-  if((a&&catOf(a)==='コンセント')||(b&&catOf(b)==='コンセント')) return 'outlet';
-  return 'lighting';
-}
 function storeFor(id){
   if(id.startsWith('wire:')){ const g=id.slice(5); return estimate.wire.groups[g]||(estimate.wire.groups[g]={}); }
   if(id.startsWith('conduit:')) return estimate.wire.conduit||(estimate.wire.conduit={});
@@ -2040,7 +2036,7 @@ function buildRows(){
     rows.push({id:'wire:'+g,kind:'wire',label:'配線 '+ct.label,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!wl.off,user:!!wl.user,uncal:(mmPerPx==null&&estimate.wire.manualLen[g]==null)});
   });
   if(estimate.wire.conduitOn && mmPerPx!=null){
-    const tot=glen.lighting+glen.outlet+glen.feeder;
+    const tot=Object.values(glen).reduce((a,b)=>a+b,0);   // 全ケーブルの合計長（glenはcable key別）
     if(tot>0){
       const cw=estimate.wire.conduit||{};
       const sel=(cw.user&&cw.name)?{cat:cw.cat,name:cw.name,spec:cw.spec,work:cw.work}:defaultConduitSel();
