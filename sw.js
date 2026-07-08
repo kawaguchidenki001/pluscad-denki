@@ -17,6 +17,13 @@ const SHELL = [
   './lib/dxf_jww/header_template.bin'
 ];
 
+function timedFetch(req, ms) {   // ネット優先だが弱電波でハングしないようタイムアウト
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    fetch(req).then(r => { clearTimeout(t); resolve(r); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
 self.addEventListener('install', ev => {
   // 一部が欠けても入れられるよう個別に addAll（失敗は握りつぶす）
   ev.waitUntil((async () => {
@@ -40,24 +47,32 @@ self.addEventListener('fetch', ev => {
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // ページ遷移（ナビゲーション）はオフライン時に index.html を返す
+  // ページ遷移：ネット優先（常に最新のindex.html）→ 取れたらキャッシュ更新、
+  // オフライン/タイムアウト時のみキャッシュ済みシェルを返す
   if (req.mode === 'navigate') {
     ev.respondWith((async () => {
-      try { return await fetch(req); }
-      catch { return (await caches.match('./index.html')) || (await caches.match('./')) || Response.error(); }
+      try {
+        const res = await timedFetch(req, 3000);
+        if (res && res.ok) caches.open(CACHE).then(c => c.put('./index.html', res.clone()));
+        return res;
+      } catch {
+        return (await caches.match('./index.html')) || (await caches.match('./')) || Response.error();
+      }
     })());
     return;
   }
 
   if (sameOrigin) {
-    // 同一オリジン資産：キャッシュ優先＋裏で更新（stale-while-revalidate）
+    // 同一オリジン資産：ネット優先（単価マスタやlibの陳腐化・版ズレを防ぐ）→
+    // 成功時キャッシュ更新、オフライン/タイムアウト時はキャッシュ
     ev.respondWith((async () => {
-      const cached = await caches.match(req);
-      const net = fetch(req).then(res => {
+      try {
+        const res = await timedFetch(req, 3000);
         if (res && res.ok) caches.open(CACHE).then(c => c.put(req, res.clone()));
         return res;
-      }).catch(() => null);
-      return cached || (await net) || Response.error();
+      } catch {
+        return (await caches.match(req)) || Response.error();
+      }
     })());
   } else {
     // クロスオリジン（PDF.js CDN等）：ネット優先、成功時にキャッシュへ（次回オフラインでも使える）

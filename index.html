@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>電気図 配置・拾い（試作 α-MVP）</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#191C22">
@@ -24,7 +24,7 @@
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;font-family:var(--jp);color:var(--ink);background:var(--panel);overflow:hidden;-webkit-user-select:none;user-select:none}
   #app{display:flex;flex-direction:column;height:100%}
-  header{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--panel-line);color:var(--txt);flex:none}
+  header{display:flex;align-items:center;gap:12px;padding:8px 14px;padding-top:calc(8px + env(safe-area-inset-top));padding-left:calc(14px + env(safe-area-inset-left));padding-right:calc(14px + env(safe-area-inset-right));background:var(--panel);border-bottom:1px solid var(--panel-line);color:var(--txt);flex:none}
   header .ttl{font-weight:700;font-size:14px;letter-spacing:.02em}
   header .sub{font-size:11px;color:var(--txt-dim)}
   header .spacer{flex:1}
@@ -77,13 +77,13 @@
 
   #hint{position:absolute;left:10px;top:10px;z-index:6;background:rgba(20,22,28,.9);border:1px solid var(--panel-line);border-radius:8px;padding:6px 11px;font-size:11px;color:var(--txt-dim);max-width:70%;pointer-events:none}
   #hint b{color:var(--txt)}
-  #zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:5px;z-index:6}
+  #zoom{position:absolute;right:calc(10px + env(safe-area-inset-right));bottom:calc(10px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:5px;z-index:6}
   #zoom button{width:36px;height:36px;border:1px solid var(--panel-line);background:var(--panel2);color:var(--txt);border-radius:9px;font-size:18px;cursor:pointer}
   #zoom button:hover{background:var(--panel3)}
   #zoom button.sm{font-size:11px;font-weight:700}
 
   /* 選択中シンボルの操作バー */
-  #selbar,#mselbar,#tselbar{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:7;display:none;
+  #selbar,#mselbar,#tselbar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:7;display:none;
     max-width:calc(100vw - 20px);flex-wrap:wrap;justify-content:center;
     background:rgba(20,22,28,.96);border:1px solid var(--panel-line);border-radius:11px;padding:7px 9px;gap:7px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.4)}
   #selbar.show,#mselbar.show,#tselbar.show{display:flex}
@@ -2349,7 +2349,7 @@ function projRowsHtml(list){
     `<button class="pjopen" data-id="${escAttr(p.id)}">開く</button><button class="pjdel" data-id="${escAttr(p.id)}">🗑</button></div>`).join('');
 }
 function refreshProjLists(){ return idbAll().then(all=>{
-  const list=all.filter(r=>r.id!==AUTO_ID);   // 自動保存スロットは一覧に出さない
+  const list=all.filter(r=>r.id!==AUTO_ID&&r.id!==AUTO_BASE_ID);   // 自動保存スロットは一覧に出さない
   ['proj-list','uploader-projlist'].forEach(id=>{ const h=el(id); if(h) h.innerHTML=projRowsHtml(list); });
   document.querySelectorAll('.pjopen').forEach(x=>x.onclick=()=>openProject(x.dataset.id));
   document.querySelectorAll('.pjdel').forEach(x=>x.onclick=()=>deleteProject(x.dataset.id));
@@ -2358,25 +2358,36 @@ function openProjModal(){ refreshProjLists(); el('modal-proj').classList.add('sh
 function closeProjModal(){ el('modal-proj').classList.remove('show'); }
 
 // ============ 自動保存（うっかり閉じても復元） ============
-const AUTO_ID='__auto__';           // projectsストア内の予約ID（一覧には出さない）
-let autosaveT=null, autosaveReady=false;
+const AUTO_ID='__auto__';           // 図面状態（下敷き画像を除く軽量分。毎回更新）
+const AUTO_BASE_ID='__auto_base__'; // 下敷き画像（多MBのため変化時のみ更新）
+let autosaveT=null, autosaveReady=false, _lastAutoBase;
 function scheduleAutosave(){ if(!autosaveReady) return; clearTimeout(autosaveT); autosaveT=setTimeout(doAutosave,1500); }
 function doAutosave(){
   if(document.getElementById('uploader').style.display!=='none') return;   // 図面を開いていない間は保存しない
   try{
-    idbPut({id:AUTO_ID, name:'(自動保存)', ts:Date.now(), data:buildState(), projId:currentProjId, projName:currentProjName}).catch(()=>{});
+    const st=buildState(); const base=st.baseSrc; st.baseSrc=null;         // 大きなPDF dataURLは軽量分と分離（毎回の多MB書込みを回避）
+    idbPut({id:AUTO_ID, name:'(自動保存)', ts:Date.now(), data:st, projId:currentProjId, projName:currentProjName, hasBase:!!base}).catch(()=>{});
+    if(base!==_lastAutoBase){ _lastAutoBase=base;                          // 下敷きが変わった時だけ画像を書く／消す
+      if(base) idbPut({id:AUTO_BASE_ID, baseSrc:base, baseW:st.baseW, baseH:st.baseH}).catch(()=>{});
+      else idbDel(AUTO_BASE_ID).catch(()=>{});
+    }
   }catch(e){}
 }
-function autosaveHasContent(d){ return !!(d&&((d.placed&&d.placed.length)||(d.texts&&d.texts.length)||(d.rooms&&d.rooms.length)||(d.wires&&d.wires.length)||d.baseSrc)); }
+function autosaveHasContent(rec){ const d=rec&&rec.data; return !!(d&&((d.placed&&d.placed.length)||(d.texts&&d.texts.length)||(d.rooms&&d.rooms.length)||(d.wires&&d.wires.length)||rec.hasBase)); }
 function checkAutosave(){
   idbGet(AUTO_ID).then(rec=>{
-    if(!rec||!autosaveHasContent(rec.data)) return;
+    if(!autosaveHasContent(rec)) return;
     const b=el('autosave-banner'); if(!b) return;
     const n=(rec.data.placed||[]).length, tn=(rec.data.texts||[]).length;
     b.innerHTML=`<span class="asmsg">🕐 前回の作業が自動保存されています（${fmtTs(rec.ts)}／記号${n}・文字${tn}${rec.projName?'・'+escHtml(rec.projName):''}）</span>`
       +`<button id="as-restore">前回の続きから</button><button id="as-dismiss" title="閉じる">✕</button>`;
     b.style.display='flex';
-    el('as-restore').onclick=()=>{ applyState(rec.data); currentProjId=rec.projId||null; currentProjName=rec.projName||''; b.style.display='none'; toast('前回の作業を復元しました'); };
+    el('as-restore').onclick=async()=>{
+      let data=rec.data;
+      if(rec.hasBase){ const bs=await idbGet(AUTO_BASE_ID).catch(()=>null); if(bs&&bs.baseSrc) data={...data, baseSrc:bs.baseSrc, baseW:bs.baseW, baseH:bs.baseH}; }
+      applyState(data); currentProjId=rec.projId||null; currentProjName=rec.projName||''; _lastAutoBase=data.baseSrc||undefined;
+      b.style.display='none'; toast('前回の作業を復元しました');
+    };
     el('as-dismiss').onclick=()=>{ b.style.display='none'; };
   }).catch(()=>{});
 }
