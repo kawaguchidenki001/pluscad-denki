@@ -1010,6 +1010,7 @@ function toggleAssign(uid){
 // ============ 文字・注記 ============
 function startTextMode(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(calibMode) endCalib();               // 較正は setTool では解除されない（誤スケール確定防止）
   setTool(null);                          // 他モードは setTool 内で解除
   textMode=true; el('btn-text').classList.add('on'); stage.classList.add('placing');
   setHint('<b>文字：</b>置きたい場所をタップ→文字を入力。続けて配置できます。もう一度「文字」で終了。');
@@ -1021,7 +1022,7 @@ function addTextAt(x,y){
   const t={uid:textSeq++, x:Math.round(x), y:Math.round(y), text:v, size:22, rot:0, color:'#E8EAF0'};
   texts.push(t); renderTexts(); pushHistory();
 }
-function textW(t){ return t.size*0.62*[...t.text].length; }   // 概算幅（当たり判定・印刷範囲用）
+function textW(t){ let w=0; for(const ch of t.text) w+=(ch.codePointAt(0)>0xFF?1.0:0.62); return t.size*w; }   // 概算幅（全角=1.0倍、半角=0.62倍。当たり判定・印刷範囲用）
 function textTransform(t){ return `translate(${t.x},${t.y}) rotate(${t.rot||0})`; }
 function renderTexts(){
   if(!textg) return;
@@ -1066,6 +1067,7 @@ function mselClear(){ if(selSet.length) selSet=[]; renderMselbar(); }
 function mselCancel(){ mselMode=false; mselStart=null; if(el('btn-msel')) el('btn-msel').classList.remove('on'); if(mselg) mselg.innerHTML=''; }
 function startMsel(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  if(calibMode) endCalib();               // 較正は setTool では解除されない
   setTool(null);
   selUid=null; selTextUid=null; renderSel(); renderTexts();
   mselMode=true; el('btn-msel').classList.add('on');
@@ -1199,6 +1201,11 @@ function startDragSym(ev,uid){
   dragSym=placed.find(x=>x.uid===uid); dragMoved=false;
   stage.setPointerCapture(ev.pointerId);
 }
+stage.addEventListener('pointercancel',()=>{   // OSジェスチャ等で中断→ドラッグ状態を残さない（残るとパンが乗っ取られる）
+  mselStart=null; if(mselg&&mselMode) mselg.innerHTML='';
+  textDrag=null; groupDrag=null; dragSym=null;
+  panStart=null; stage.classList.remove('panning');
+});
 // ホイールズーム
 stage.addEventListener('wheel',ev=>{ ev.preventDefault(); const r=stage.getBoundingClientRect(); zoomAt(ev.clientX-r.left,ev.clientY-r.top, ev.deltaY<0?1.12:0.89); },{passive:false});
 
@@ -1226,10 +1233,11 @@ document.getElementById('calib-ok').onclick=()=>{
   if(!isFinite(mm)||mm<=0){ toast('正しい数値を入力してください'); return; }
   const dx=calibPts[1].x-calibPts[0].x, dy=calibPts[1].y-calibPts[0].y;
   const distpx=Math.hypot(dx,dy);
+  const wasUncal=(mmPerPx==null);
   mmPerPx=mm/distpx;
   endCalib();
   document.getElementById('scaleinfo').innerHTML=`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`;
-  if(snapOn&&gridMm<=100) gridMm=455;   // px仮設定のまま較正したらmm既定へ
+  if(snapOn&&wasUncal&&gridMm<=100) gridMm=455;   // px仮設定のまま初回較正→mm既定へ（再較正では意図した間隔を保持）
   updateSnapUI();
   toast('縮尺を設定しました');
 };
