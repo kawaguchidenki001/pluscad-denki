@@ -910,11 +910,10 @@ function showSnapMark(x,y){ if(!snapg) return; const R=6;
     +`<rect x="${-R}" y="${-R}" width="${R*2}" height="${R*2}"/><line x1="${-R-3}" y1="0" x2="${R+3}" y2="0"/><line x1="0" y1="${-R-3}" x2="0" y2="${R+3}"/></g>`;
 }
 function hideSnapMark(){ if(snapg) snapg.innerHTML=''; }
+function gridSnapPt(x,y){ if(!snapOn) return {x,y}; const g=gridPx(); if(!(g>0.5)) return {x,y}; return {x:Math.round(x/g)*g, y:Math.round(y/g)*g}; }
 function snapPt(x,y){
   if(esnapOn){ const s=esnapNearest(x,y); if(s){ showSnapMark(s.x,s.y); return {x:s.x,y:s.y}; } hideSnapMark(); }
-  if(!snapOn) return {x,y};
-  const g=gridPx(); if(!(g>0.5)) return {x,y};
-  return {x:Math.round(x/g)*g, y:Math.round(y/g)*g};
+  return gridSnapPt(x,y);   // 読取点が無ければ従来のグリッド吸着
 }
 function renderGrid(){
   if(!gridg) return;
@@ -1522,8 +1521,8 @@ el('msel-del').onclick=()=>{
 el('msel-x').onclick=()=>{ mselClear(); renderSyms(); };
 function mselAlign(kind){
   const items=mselItems(); if(items.length<2){ toast('2個以上選択してください'); return; }
-  if(kind==='alH'){ const y=snapPt(0, items.reduce((s,p)=>s+p.y,0)/items.length).y; items.forEach(p=>p.y=Math.round(y)); }
-  else if(kind==='alV'){ const x=snapPt(items.reduce((s,p)=>s+p.x,0)/items.length, 0).x; items.forEach(p=>p.x=Math.round(x)); }
+  if(kind==='alH'){ const y=gridSnapPt(0, items.reduce((s,p)=>s+p.y,0)/items.length).y; items.forEach(p=>p.y=Math.round(y)); }   // 整列は格子のみ（読取点で軸へ吸着しない）
+  else if(kind==='alV'){ const x=gridSnapPt(items.reduce((s,p)=>s+p.x,0)/items.length, 0).x; items.forEach(p=>p.x=Math.round(x)); }
   else if(kind==='dsH'){ const s=[...items].sort((a,b)=>a.x-b.x); const x0=s[0].x, x1=s[s.length-1].x; s.forEach((p,i)=>p.x=Math.round(x0+(x1-x0)*i/(s.length-1))); }
   else if(kind==='dsV'){ const s=[...items].sort((a,b)=>a.y-b.y); const y0=s[0].y, y1=s[s.length-1].y; s.forEach((p,i)=>p.y=Math.round(y0+(y1-y0)*i/(s.length-1))); }
   renderSyms(); renderWireInfo(); pushHistory();
@@ -1595,6 +1594,7 @@ stage.addEventListener('pointermove',ev=>{
   }
 });
 stage.addEventListener('pointerup',ev=>{
+  hideSnapMark();   // 操作終了で読取点マーカーを消す（早期returnする分岐＝文字ドラッグ等でも確実に消える）
   if(mselStart){ const a=mselStart; mselStart=null; mselFinish(a,toWorld(ev.clientX,ev.clientY)); return; }
   if(textDrag){ if(textDrag.moved){ renderTexts(); pushHistory(); } textDrag=null; return; }
   if(groupDrag){ if(groupDrag.moved){ renderTally(); renderWireInfo(); pushHistory(); } groupDrag=null; return; }
@@ -1602,7 +1602,6 @@ stage.addEventListener('pointerup',ev=>{
   if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y);
     if(moved<4 && !assignMode){ selUid=null; if(selTextUid!=null){ selTextUid=null; renderTexts(); } mselClear(); renderSyms(); renderSel(); }
     panStart=null; stage.classList.remove('panning'); }
-  hideSnapMark();   // 読取点マーカーは操作終了で消す（次のホバー/ドラッグで再表示）
 });
 function startDragSym(ev,uid){
   if(curTool||calibMode||layoutMode||wireMode)return;
