@@ -264,6 +264,8 @@
   #expmenu button:last-child{border-bottom:none}
   #expmenu button:hover{background:var(--panel3)}
   #expmenu .note{font-size:10px;color:var(--txt-dim);padding:7px 14px 9px;line-height:1.5}
+  #expmenu .expchk{display:flex;align-items:center;gap:7px;padding:9px 14px;font-size:11px;color:var(--txt);border-bottom:1px solid var(--panel-line);cursor:pointer;line-height:1.4}
+  #expmenu .expchk input{width:15px;height:15px;flex:none}
   #enote{flex:none;font-size:10.5px;color:var(--txt-dim);padding:7px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
   #efoot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
 </style>
@@ -291,6 +293,7 @@
         <button id="exp-dxf">完成図 DXF（.dxf）</button>
         <button id="exp-jww">完成図 JWW（.jww）</button>
         <button id="exp-print">印刷（PDF保存）</button>
+        <label class="expchk"><input type="checkbox" id="exp-frame" checked>図枠・タイトル欄・凡例表を付ける（印刷）</label>
         <div class="note">DXF/JWWは較正済み実寸[mm]で出力。JWWは自動縮尺（A3基準）。</div>
       </div>
     </span>
@@ -309,6 +312,7 @@
         <div id="base"><img id="baseimg" alt=""></div>
         <svg id="overlay" xmlns="http://www.w3.org/2000/svg">
           <defs id="symdefs"></defs>
+          <g id="baseg"></g>
           <g id="gridg"></g>
           <g id="calibg"></g>
           <g id="layoutg"></g>
@@ -433,7 +437,7 @@
     <div id="autosave-banner" style="display:none"></div>
     <div id="drop">
       <div class="ic">⬇</div>
-      PDF / 画像(PNG・JPG) をここにドロップ<br>またはクリックで選択
+      PDF / 画像(PNG・JPG) / DXF・JWW をここにドロップ<br>またはクリックで選択<br><span style="font-size:11px;color:var(--txt-dim)">※DXF/JWWは実寸で読み込むので較正不要</span>
     </div>
     <div class="row">
       <button id="btn-sample">下敷きなしで始める</button>
@@ -513,7 +517,7 @@
   <div class="toast" id="toast"></div>
 </div>
 
-<input type="file" id="file-base" accept=".pdf,image/*">
+<input type="file" id="file-base" accept=".pdf,.dxf,.jww,image/*">
 <input type="file" id="file-load" accept=".json,application/json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- DXF⇔JWW 変換エンジン（完成図の書き出し / Step E） -->
@@ -647,7 +651,9 @@ let selUid = null;
 let uidSeq = 1;
 let curTool = null;       // 選択中のシンボルid（配置モード）
 let baseW=1200, baseH=850;// 下敷きサイズ(px)
-let baseSrc = null;       // 下敷き dataURL
+let baseSrc = null;       // ラスタ下敷き dataURL（PDF/画像）
+let baseVec = null;       // ベクター下敷き {kind:'dxf', text} （DXF/JWW→DXFテキスト。実mm座標）
+let baseToken = 0;        // 下敷きが変わるたびに加算（自動保存の重複書込み判定用）
 // view
 let scale=1, tx=0, ty=0;
 // 縮尺較正
@@ -705,6 +711,7 @@ const layoutg=document.getElementById('layoutg');
 const wireg=document.getElementById('wireg');
 const textg=document.getElementById('textg');
 const gridg=document.getElementById('gridg');
+const baseg=document.getElementById('baseg');
 const mselg=document.getElementById('mselg');
 const baseimg=document.getElementById('baseimg');
 const baseEl=document.getElementById('base');
@@ -829,16 +836,88 @@ el('grid-mm').addEventListener('input',e=>{ const v=parseFloat(e.target.value); 
 
 // ============ 下敷き設定 ============
 function setBaseSize(w,h){ baseW=w; baseH=h; baseEl.style.width=w+'px'; baseEl.style.height=h+'px'; overlay.setAttribute('width',w); overlay.setAttribute('height',h); overlay.setAttribute('viewBox',`0 0 ${w} ${h}`); renderGrid(); }
-function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); }
-function applyBaseOpacity(){ baseimg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
+function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); baseToken++; }
+function applyBaseOpacity(){ baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
 el('base-op').addEventListener('input',e=>{ baseOpacity=(+e.target.value||100)/100; baseimg.style.opacity=baseOpacity; });
-function clearBase(){ baseSrc=null; baseimg.removeAttribute('src'); setBaseSize(1200,850); }
+function clearBase(){ baseSrc=null; baseVec=null; baseg.innerHTML=''; baseimg.removeAttribute('src'); setBaseSize(1200,850); baseToken++; }
+function applyBaseVecOpacity(){ baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
+
+// ── DXF/JWW をベクター下敷きに（実mm座標＝較正不要） ──
+// DXFテキストを解析し #baseg に描画。baseW/baseH=図面範囲(mm)、mmPerPx=1、Y反転。
+function setBaseVec(dxfText){
+  const doc=window.DxfParser.parseDxf(dxfText);
+  const prims=[]; const bb={minx:Infinity,miny:Infinity,maxx:-Infinity,maxy:-Infinity};
+  const bump=(x,y)=>{ if(x<bb.minx)bb.minx=x; if(x>bb.maxx)bb.maxx=x; if(y<bb.miny)bb.miny=y; if(y>bb.maxy)bb.maxy=y; };
+  const D2R=Math.PI/180;
+  function emit(e, ox, oy, sc, rot){                       // ox,oy,sc,rot: INSERT変換（rot度）
+    const rc=Math.cos((rot||0)*D2R), rs=Math.sin((rot||0)*D2R), s=(sc==null?1:sc);
+    const T=(x,y)=>{ const X=x*s, Y=y*s; return [ (X*rc-Y*rs)+ (ox||0), (X*rs+Y*rc)+(oy||0) ]; };
+    const t=e.type;
+    if(t==='LINE'){ const a=T(e.x||0,e.y||0), b=T(e.x2||0,e.y2||0); prims.push({k:'line',a,b}); bump(a[0],a[1]); bump(b[0],b[1]); }
+    else if(t==='CIRCLE'){ const c=T(e.x||0,e.y||0); prims.push({k:'circle',c,r:(e.r||0)*s}); bump(c[0]-e.r*s,c[1]-e.r*s); bump(c[0]+e.r*s,c[1]+e.r*s); }
+    else if(t==='ARC'){ const c=T(e.x||0,e.y||0); prims.push({k:'arc',c,r:(e.r||0)*s,a0:(e.startAngle||0)+(rot||0),a1:(e.endAngle||0)+(rot||0)}); bump(c[0]-e.r*s,c[1]-e.r*s); bump(c[0]+e.r*s,c[1]+e.r*s); }
+    else if(t==='LWPOLYLINE'||t==='POLYLINE'){ const pts=(e.vertices||[]).map(v=>T(v.x||0,v.y||0)); if(pts.length){ prims.push({k:'poly',pts,closed:!!((e.flags||0)&1)}); pts.forEach(p=>bump(p[0],p[1])); } }
+    else if(t==='POINT'){ const c=T(e.x||0,e.y||0); prims.push({k:'circle',c,r:1}); bump(c[0],c[1]); }
+    else if(t==='SOLID'){ const a=T(e.x||0,e.y||0), b=T(e.x2||0,e.y2||0); prims.push({k:'line',a,b}); bump(a[0],a[1]); bump(b[0],b[1]); }
+    else if(t==='TEXT'||t==='MTEXT'){ if(e.text){ const c=T(e.x||0,e.y||0); prims.push({k:'text',c,h:(e.r||2.5)*s,text:e.text,rot:(e.rot||0)+(rot||0),wf:e.widthFactor||1}); bump(c[0],c[1]); } }
+    else if(t==='INSERT'){ const blk=doc.blocks&&doc.blocks[e.name]; if(blk&&emit._d<6){ emit._d++;
+      const bx=(e.x||0), by=(e.y||0), bs=(e.xScale||1), br=(e.rotation||0);
+      // ブロック基準点を差し引いてから INSERT 変換
+      blk.entities.forEach(be=>{ const be2=Object.assign({},be);
+        // ブロック内座標をブロック基準点だけ平行移動（簡易）
+        emitInsert(be2, blk, bx, by, bs, br);
+      });
+      emit._d--; } }
+  }
+  emit._d=0;
+  function emitInsert(be, blk, bx, by, bs, br){
+    // ブロック内エンティティを (block基準点補正 → scale/rot → insert位置) で配置（1階層、簡易）
+    const rc=Math.cos(br*D2R), rs=Math.sin(br*D2R);
+    const map=(x,y)=>{ const X=(x-(blk.base_x||0))*bs, Y=(y-(blk.base_y||0))*bs; return [ (X*rc-Y*rs)+bx, (X*rs+Y*rc)+by ]; };
+    const t=be.type;
+    if(t==='LINE'){ const a=map(be.x||0,be.y||0), b=map(be.x2||0,be.y2||0); prims.push({k:'line',a,b}); bump(a[0],a[1]); bump(b[0],b[1]); }
+    else if(t==='CIRCLE'){ const c=map(be.x||0,be.y||0); prims.push({k:'circle',c,r:(be.r||0)*bs}); bump(c[0]-be.r*bs,c[1]-be.r*bs); bump(c[0]+be.r*bs,c[1]+be.r*bs); }
+    else if(t==='ARC'){ const c=map(be.x||0,be.y||0); prims.push({k:'arc',c,r:(be.r||0)*bs,a0:(be.startAngle||0)+br,a1:(be.endAngle||0)+br}); bump(c[0]-be.r*bs,c[1]-be.r*bs); bump(c[0]+be.r*bs,c[1]+be.r*bs); }
+    else if(t==='LWPOLYLINE'||t==='POLYLINE'){ const pts=(be.vertices||[]).map(v=>map(v.x||0,v.y||0)); if(pts.length){ prims.push({k:'poly',pts,closed:!!((be.flags||0)&1)}); pts.forEach(p=>bump(p[0],p[1])); } }
+    else if(t==='TEXT'||t==='MTEXT'){ if(be.text){ const c=map(be.x||0,be.y||0); prims.push({k:'text',c,h:(be.r||2.5)*bs,text:be.text,rot:(be.rot||0)+br,wf:be.widthFactor||1}); bump(c[0],c[1]); } }
+  }
+  (doc.entities||[]).forEach(e=>emit(e));
+  if(!isFinite(bb.minx)){                       // エンティティ無し→ヘッダのEXTMINで最小サイズ
+    const em=doc.header&&doc.header['$EXTMIN'], ex=doc.header&&doc.header['$EXTMAX'];
+    if(em&&ex){ bb.minx=em.x; bb.miny=em.y; bb.maxx=ex.x; bb.maxy=ex.y; } else { bb.minx=0;bb.miny=0;bb.maxx=420;bb.maxy=297; }
+  }
+  const M=20;                                    // 余白mm
+  const W=Math.max(1,(bb.maxx-bb.minx))+M*2, H=Math.max(1,(bb.maxy-bb.miny))+M*2;
+  const SX=x=>(x-bb.minx)+M, SY=y=>(bb.maxy-y)+M;   // X平行移動＋Y反転（DXFはY上向き）
+  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let svg='';
+  for(const p of prims){
+    if(p.k==='line') svg+=`<line x1="${SX(p.a[0])}" y1="${SY(p.a[1])}" x2="${SX(p.b[0])}" y2="${SY(p.b[1])}"/>`;
+    else if(p.k==='circle') svg+=`<circle cx="${SX(p.c[0])}" cy="${SY(p.c[1])}" r="${p.r}" fill="none"/>`;
+    else if(p.k==='arc'){ const a0=p.a0*D2R, a1=p.a1*D2R; // CCW→Y反転で描画方向反転
+      const x0=SX(p.c[0]+p.r*Math.cos(a0)), y0=SY(p.c[1]+p.r*Math.sin(a0));
+      const x1=SX(p.c[0]+p.r*Math.cos(a1)), y1=SY(p.c[1]+p.r*Math.sin(a1));
+      let da=p.a1-p.a0; while(da<0)da+=360; while(da>360)da-=360; const large=da>180?1:0;
+      svg+=`<path d="M ${x0} ${y0} A ${p.r} ${p.r} 0 ${large} 0 ${x1} ${y1}" fill="none"/>`; }   // sweep=0（Y反転でCCW→時計回り）
+    else if(p.k==='poly'){ const d='M '+p.pts.map(q=>`${SX(q[0])} ${SY(q[1])}`).join(' L ')+(p.closed?' Z':''); svg+=`<path d="${d}" fill="none"/>`; }
+    else if(p.k==='text'){ svg+=`<text x="${SX(p.c[0])}" y="${SY(p.c[1])}" font-size="${p.h}" transform="rotate(${-p.rot} ${SX(p.c[0])} ${SY(p.c[1])})" fill="currentColor" stroke="none">${esc(p.text)}</text>`; }
+  }
+  baseSrc=null; baseimg.removeAttribute('src'); baseVec={kind:'dxf', text:dxfText};
+  baseg.innerHTML=`<g fill="none" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke" style="color:#7f8a9a">${svg}</g>`;
+  setBaseSize(Math.ceil(W),Math.ceil(H));
+  mmPerPx=1;                                     // DXF/JWWは実mm→較正不要
+  document.getElementById('scaleinfo').innerHTML=`縮尺：<b>1px = 1.00mm</b>（DXF/JWW実寸）`;
+  applyBaseVecOpacity();
+  baseToken++;
+  return prims.length;
+}
 
 async function loadFile(file){
   const name=(file.name||'').toLowerCase();
   if(name.endsWith('.pdf')){ await loadPDF(file); }
+  else if(name.endsWith('.dxf')||name.endsWith('.jww')){ const okc=await loadCAD(file,name); if(!okc) return; }
   else if(file.type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp)$/.test(name)){ await loadImage(file); }
-  else { toast('対応外の形式です（PDF/画像のみ）'); return; }
+  else { toast('対応外の形式です（PDF/画像/DXF/JWW）'); return; }
   // 別の図面（下敷き）を開いたら保存先をリセット＝次の「保存」は新規保存（既存図面を無断で上書きしない）
   currentProjId=null; currentProjName='';
   document.getElementById('uploader').style.display='none';
@@ -852,6 +931,25 @@ function loadImage(file){
     r.onload=()=>{ const im=new Image(); im.onload=()=>{ setBaseImage(r.result,im.naturalWidth,im.naturalHeight); res(); }; im.src=r.result; };
     r.readAsDataURL(file);
   });
+}
+// DXF/JWW を下敷きに（DXFはShift-JIS/UTF-8テキスト、JWWはバイナリ→jwwToDxfでDXF化）
+async function loadCAD(file, name){
+  try{
+    let dxfText;
+    if(name.endsWith('.dxf')){
+      const buf=new Uint8Array(await file.arrayBuffer());
+      dxfText=window.DxfParser.decodeBytes(buf);      // $DWGCODEPAGE準拠でSJIS/UTF-8判定
+    } else {
+      await window.JwwWriter.ensureSjisMap();
+      const buf=new Uint8Array(await file.arrayBuffer());
+      const r=await window.JwwToDxf.jwwToDxf(buf);
+      dxfText=new TextDecoder('shift_jis').decode(r.bytes);
+    }
+    const n=setBaseVec(dxfText);
+    if(!n){ toast('図形が見つかりませんでした（対応外のCADかもしれません）'); }
+    else toast(`${name.endsWith('.jww')?'JWW':'DXF'}を下敷きにしました（${n}要素・較正不要）`);
+    return true;
+  }catch(err){ console.error(err); toast('CADファイルを読めませんでした'); return false; }
 }
 async function loadPDF(file){
   if(!window.pdfjsLib){ toast('PDF描画ライブラリの読込待ち…もう一度お試しください'); return; }
@@ -2194,7 +2292,9 @@ function printScale(vw,vh){  // canvas面積上限（iOS Safari≒16.7MP）か�
 }
 function buildPrintSVG(){
   const rc=printRect();
-  const img=baseSrc?`<image href="${baseSrc}" x="0" y="0" width="${baseW}" height="${baseH}"/>`:'';
+  // 下敷き：ラスタは画像、ベクター(DXF/JWW)は #baseg のSVGを黒で合成
+  const img=baseSrc?`<image href="${baseSrc}" x="0" y="0" width="${baseW}" height="${baseH}"/>`
+    :(baseVec?`<g style="color:#333">${baseg.innerHTML}</g>`:'');
   const wl=wires.map(w=>{
     const a=placed.find(p=>p.uid===w.a), b=placed.find(p=>p.uid===w.b);
     if(!a||!b) return '';
@@ -2206,9 +2306,51 @@ function buildPrintSVG(){
     return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(colorOf(p.type))}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
   }).join('');
   const tl=texts.map(t=>`<g transform="${textTransform(t)}"><text x="0" y="0" font-size="${t.size}" fill="${printInk(t.color||'#E8EAF0')}" text-anchor="middle" dominant-baseline="central" font-family="sans-serif">${escHtml(t.text)}</text></g>`).join('');
+  const frame=(el('exp-frame')&&el('exp-frame').checked)?buildTitleBlockSVG(rc):'';
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${rc.vx} ${rc.vy} ${rc.vw} ${rc.vh}" width="${rc.vw}" height="${rc.vh}">`
-    +`<rect x="${rc.vx}" y="${rc.vy}" width="${rc.vw}" height="${rc.vh}" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}${tl}</svg>`;
+    +`<rect x="${rc.vx}" y="${rc.vy}" width="${rc.vw}" height="${rc.vh}" fill="#fff"/>${img}<defs>${document.getElementById('symdefs').innerHTML}</defs>${wl}${uses}${tl}${frame}</svg>`;
   return {svg, ...rc};
+}
+// 図枠＋タイトル欄＋凡例表（印刷用。座標は印刷ビュー rc に対する実寸px）
+function buildTitleBlockSVG(rc){
+  const S=Math.max(rc.vw,rc.vh)/100;             // 用紙サイズに応じた基準寸法
+  const pad=2.2*S, x0=rc.vx+pad, y0=rc.vy+pad, x1=rc.vx+rc.vw-pad, y1=rc.vy+rc.vh-pad;
+  const fs=Math.max(9, 2.0*S), fsS=fs*0.8, sw=Math.max(1,0.25*S);
+  const esc=s=>escHtml(s==null?'':s);
+  let g=`<g font-family="sans-serif" fill="#111">`;
+  // 図枠（二重線）
+  g+=`<rect x="${x0}" y="${y0}" width="${x1-x0}" height="${y1-y0}" fill="none" stroke="#111" stroke-width="${sw*2}"/>`;
+  g+=`<rect x="${x0+S*0.8}" y="${y0+S*0.8}" width="${x1-x0-S*1.6}" height="${y1-y0-S*1.6}" fill="none" stroke="#111" stroke-width="${sw}"/>`;
+  // タイトル欄（右下）
+  const h=estimate.head||{};
+  const rows=[['工事名', h.name||''],['宛先', h.to||''],['見積番号', h.no||''],['作成日', h.date||fmtTs(Date.now()).slice(0,10)],['縮尺', (mmPerPx!=null)?'実寸(mm)':'—']];
+  const tbW=Math.min(rc.vw*0.42, 78*S), tbH=(rows.length)*fs*1.8, tbX=x1-S*0.8-tbW, tbY=y1-S*0.8-tbH;
+  g+=`<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="#fff" stroke="#111" stroke-width="${sw*1.5}"/>`;
+  rows.forEach((r,i)=>{ const ry=tbY+i*fs*1.8;
+    if(i) g+=`<line x1="${tbX}" y1="${ry}" x2="${tbX+tbW}" y2="${ry}" stroke="#111" stroke-width="${sw}"/>`;
+    g+=`<line x1="${tbX+tbW*0.28}" y1="${ry}" x2="${tbX+tbW*0.28}" y2="${ry+fs*1.8}" stroke="#111" stroke-width="${sw}"/>`;
+    g+=`<text x="${tbX+tbW*0.14}" y="${ry+fs*1.15}" font-size="${fsS}" text-anchor="middle" fill="#333">${esc(r[0])}</text>`;
+    g+=`<text x="${tbX+tbW*0.31}" y="${ry+fs*1.15}" font-size="${fs}" font-weight="700">${esc(r[1])}</text>`;
+  });
+  // 凡例表（左下）：使用した記号＋個数
+  const counts={}; placed.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
+  const used=SYMBOLS.filter(s=>counts[s.id]);
+  if(used.length){
+    const rh=fs*1.7, lgW=Math.min(rc.vw*0.34, 66*S), lgH=(used.length+1)*rh, lgX=x0+S*0.8, lgY=y1-S*0.8-lgH;
+    g+=`<rect x="${lgX}" y="${lgY}" width="${lgW}" height="${lgH}" fill="#fff" stroke="#111" stroke-width="${sw*1.5}"/>`;
+    g+=`<rect x="${lgX}" y="${lgY}" width="${lgW}" height="${rh}" fill="#eee" stroke="#111" stroke-width="${sw}"/>`;
+    g+=`<text x="${lgX+lgW/2}" y="${lgY+rh*0.72}" font-size="${fsS}" text-anchor="middle" font-weight="700">凡例（記号一覧）</text>`;
+    used.forEach((s,i)=>{ const ry=lgY+rh*(i+1);
+      g+=`<line x1="${lgX}" y1="${ry}" x2="${lgX+lgW}" y2="${ry}" stroke="#111" stroke-width="${sw}"/>`;
+      // 記号ミニ図（左）
+      const cell=rh*0.9;
+      g+=`<g transform="translate(${lgX+rh*0.55},${ry+rh*0.5}) scale(${cell/40})" style="color:#111"><g transform="translate(-20,-20)"><use href="#sym-${s.id}"/></g></g>`;
+      g+=`<text x="${lgX+rh*1.25}" y="${ry+rh*0.68}" font-size="${fsS}" fill="#111">${esc(s.nm)}</text>`;
+      g+=`<text x="${lgX+lgW-rh*0.4}" y="${ry+rh*0.68}" font-size="${fsS}" text-anchor="end" font-weight="700">${counts[s.id]}</text>`;
+    });
+  }
+  g+=`</g>`;
+  return g;
 }
 
 function exportGuard(){
@@ -2242,7 +2384,7 @@ async function exportJWW(){
 }
 function exportPrint(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開いてください'); return; }
-  if(!placed.length&&!texts.length&&!baseSrc){ toast('印刷する内容がありません'); return; }
+  if(!placed.length&&!texts.length&&!baseSrc&&!baseVec){ toast('印刷する内容がありません'); return; }
   const {svg,vw,vh}=buildPrintSVG();
   const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
   const img=new Image();
@@ -2287,7 +2429,7 @@ function renderTally(){
 // ============ 保存/読込/出力 ============
 // 現在の全状態を1オブジェクトに（ファイル/ブラウザ内保存 共通）
 function buildState(){
-  return {ver:'alpha-mvp-6', baseW,baseH, baseSrc, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm};
+  return {ver:'alpha-mvp-7', baseW,baseH, baseSrc, baseVec, mmPerPx, uidSeq, placed, rooms, roomSeq, wires, wireSeq, estimate, typeColors, baseOpacity, copyStep, texts, textSeq, snapOn, gridMm};
 }
 // 状態オブジェクトを適用（ファイル読込・ブラウザ内保存の復元 共通）
 function applyState(st){
@@ -2302,9 +2444,12 @@ function applyState(st){
   snapOn=!!st.snapOn; gridMm=st.gridMm||455;
   estimate=st.estimate||defaultEstimate();
   typeColors=st.typeColors||{}; baseOpacity=(st.baseOpacity!=null?st.baseOpacity:1); copyStep=st.copyStep||1000;
-  if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); } else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); applyBaseOpacity(); }
+  let vec=false;
+  if(st.baseVec&&st.baseVec.text){ try{ setBaseVec(st.baseVec.text); vec=true; mmPerPx=1; }catch(e){ setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); applyBaseOpacity(); } }
+  else if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); }
+  else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); applyBaseOpacity(); }
   document.getElementById('uploader').style.display='none';
-  document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
+  if(!vec) document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
   refreshAllPaletteColors();
   selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); renderTexts(); renderMselbar(); updateSnapUI(); fitView();
   resetHistory();
@@ -2365,10 +2510,12 @@ function scheduleAutosave(){ if(!autosaveReady) return; clearTimeout(autosaveT);
 function doAutosave(){
   if(document.getElementById('uploader').style.display!=='none') return;   // 図面を開いていない間は保存しない
   try{
-    const st=buildState(); const base=st.baseSrc; st.baseSrc=null;         // 大きなPDF dataURLは軽量分と分離（毎回の多MB書込みを回避）
-    idbPut({id:AUTO_ID, name:'(自動保存)', ts:Date.now(), data:st, projId:currentProjId, projName:currentProjName, hasBase:!!base}).catch(()=>{});
-    if(base!==_lastAutoBase){ _lastAutoBase=base;                          // 下敷きが変わった時だけ画像を書く／消す
-      if(base) idbPut({id:AUTO_BASE_ID, baseSrc:base, baseW:st.baseW, baseH:st.baseH}).catch(()=>{});
+    const st=buildState();
+    const base={baseSrc:st.baseSrc, baseVec:st.baseVec, baseW:st.baseW, baseH:st.baseH};   // 大きな下敷き(PDF dataURL/DXF text)は分離
+    const hasBase=!!(st.baseSrc||st.baseVec); st.baseSrc=null; st.baseVec=null;
+    idbPut({id:AUTO_ID, name:'(自動保存)', ts:Date.now(), data:st, projId:currentProjId, projName:currentProjName, hasBase}).catch(()=>{});
+    if(baseToken!==_lastAutoBase){ _lastAutoBase=baseToken;                 // 下敷きが変わった時だけ書く／消す
+      if(hasBase) idbPut(Object.assign({id:AUTO_BASE_ID}, base)).catch(()=>{});
       else idbDel(AUTO_BASE_ID).catch(()=>{});
     }
   }catch(e){}
@@ -2384,8 +2531,8 @@ function checkAutosave(){
     b.style.display='flex';
     el('as-restore').onclick=async()=>{
       let data=rec.data;
-      if(rec.hasBase){ const bs=await idbGet(AUTO_BASE_ID).catch(()=>null); if(bs&&bs.baseSrc) data={...data, baseSrc:bs.baseSrc, baseW:bs.baseW, baseH:bs.baseH}; }
-      applyState(data); currentProjId=rec.projId||null; currentProjName=rec.projName||''; _lastAutoBase=data.baseSrc||undefined;
+      if(rec.hasBase){ const bs=await idbGet(AUTO_BASE_ID).catch(()=>null); if(bs&&(bs.baseSrc||bs.baseVec)) data={...data, baseSrc:bs.baseSrc||null, baseVec:bs.baseVec||null, baseW:bs.baseW, baseH:bs.baseH}; }
+      applyState(data); currentProjId=rec.projId||null; currentProjName=rec.projName||''; _lastAutoBase=baseToken;
       b.style.display='none'; toast('前回の作業を復元しました');
     };
     el('as-dismiss').onclick=()=>{ b.style.display='none'; };
@@ -2418,7 +2565,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.9', APP_DATE='2026-07-08';
+const APP_VERSION='0.10', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
