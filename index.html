@@ -533,7 +533,8 @@
     <div id="etot"></div>
     <div id="enote">※単価＝複合単価(材料＋労務＋直接経費)。丸めにより内訳計と金額は一致しないことがあります。／現場管理費・一般管理費は工事全体割増で、複合単価内の経費とは二重計上ではありません（既定0%＝実勢率が決まるまで加算しません）。／配線は縮尺較正済みの場合のみ計上します。品目・規格は自動割当のたたき台です（黄＝自動／緑＝確定済／赤＝未マッチ）。必ず内容をご確認ください。</div>
     <div id="efoot">
-      <button id="e-csv" class="acc">見積CSV（Excel）</button>
+      <button id="e-csv">見積CSV</button>
+      <button id="e-xlsx" class="acc">見積Excel（.xlsx）</button>
     </div>
   </div>
 
@@ -2066,6 +2067,7 @@ function specSelectHtml(r){ const cat=r.sel?r.sel.cat:'',name=r.sel?r.sel.name:'
 el('btn-estimate').onclick=openEstimate;
 el('e-close').onclick=()=>el('modal-estimate').classList.remove('show');
 el('e-csv').onclick=exportEstimateCSV;
+el('e-xlsx').onclick=exportEstimateXLSX;
 el('e-loadmaster').onclick=()=>el('file-unit').click();
 el('file-unit').addEventListener('change',e=>{ const f=e.target.files[0]; e.target.value=''; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const j=JSON.parse(r.result); if(Array.isArray(j)&&j.length){ setMaster(j); setMasterChip('ok'); el('e-loadmaster').style.display='none'; renderEstimate(); } else toast('形式が不正です'); }catch(err){ toast('読み込めませんでした'); } }; r.readAsText(f); });
 
@@ -2185,6 +2187,110 @@ function exportEstimateCSV(){
   dl(new Blob([csv],{type:'text/csv'}),'mitsumori_'+ts()+'.csv'); toast('見積CSVを書き出しました');
 }
 function csvCell(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; }
+
+// ============ Excel(.xlsx) 書き出し（依存なし＝ZIP(格納)＋OOXML内製。オフライン可） ============
+const _crcTab=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(bytes){ let c=0xFFFFFFFF; for(let i=0;i<bytes.length;i++) c=_crcTab[(c^bytes[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function zipStore(files){                    // files: [{name, str}]  method=0(格納) → 無圧縮でオフラインも軽量
+  const enc=new TextEncoder();
+  const u16=v=>[v&0xFF,(v>>8)&0xFF], u32=v=>[v&0xFF,(v>>8)&0xFF,(v>>16)&0xFF,(v>>24)&0xFF];
+  const parts=[], central=[]; let offset=0;
+  for(const f of files){
+    const nameB=enc.encode(f.name), dataB=enc.encode(f.str), crc=crc32(dataB);
+    parts.push(new Uint8Array([].concat(u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(dataB.length),u32(dataB.length),u16(nameB.length),u16(0))), nameB, dataB);
+    central.push(new Uint8Array([].concat(u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(dataB.length),u32(dataB.length),u16(nameB.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(offset))), nameB);
+    offset+=30+nameB.length+dataB.length;
+  }
+  let cdSize=0; central.forEach(a=>cdSize+=a.length); const cdStart=offset;
+  const eocd=new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),u16(central.length/2),u16(central.length/2),u32(cdSize),u32(cdStart),u16(0)));
+  const all=parts.concat(central,[eocd]); let total=0; all.forEach(a=>total+=a.length);
+  const out=new Uint8Array(total); let p=0; all.forEach(a=>{ out.set(a,p); p+=a.length; });
+  return out;
+}
+function xesc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function colLetter(n){ let s=''; n++; while(n>0){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; }
+// セル: {v, t:'n'|'s', s:styleIdx}。空はスキップ。
+function _cellXml(ci,ri,cell){
+  if(cell==null) return '';
+  const ref=colLetter(ci)+ri, st=cell.s?` s="${cell.s}"`:'';
+  if(cell.v==null||cell.v===''){ return cell.s?`<c r="${ref}"${st}/>`:''; }
+  if(cell.t==='n') return `<c r="${ref}"${st}><v>${cell.v}</v></c>`;
+  return `<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${xesc(cell.v)}</t></is></c>`;
+}
+// aoa: 行×セル配列。cols: 幅[]、merges: "A1:N1"[]。→ {parts, bytes}
+function buildXlsx(sheetName, aoa, cols, merges){
+  const colsXml=(cols&&cols.length)?`<cols>${cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>`:'';
+  const rowsXml=aoa.map((row,ri)=>`<row r="${ri+1}">${row.map((c,ci)=>_cellXml(ci,ri+1,c)).join('')}</row>`).join('');
+  const mergeXml=(merges&&merges.length)?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:'';
+  const sheet=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${colsXml}<sheetData>${rowsXml}</sheetData>${mergeXml}</worksheet>`;
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+    +`<fonts count="3"><font><sz val="11"/><name val="ＭＳ Ｐゴシック"/></font><font><b/><sz val="11"/><name val="ＭＳ Ｐゴシック"/></font><font><b/><sz val="14"/><name val="ＭＳ Ｐゴシック"/></font></fonts>`
+    +`<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8EAF0"/></patternFill></fill></fills>`
+    +`<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border></borders>`
+    +`<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
+    +`<cellXfs count="8">`
+    +`<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`                                                                                   // 0 default
+    +`<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>` // 1 header
+    +`<xf numFmtId="3" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>`                                       // 2 money #,##0
+    +`<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="left" wrapText="1"/></xf>`                                                 // 3 text
+    +`<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>`                                               // 4 total label bold
+    +`<xf numFmtId="3" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>`                         // 5 total money bold
+    +`<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>`                                                                                                                     // 6 title
+    +`<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>`                                                             // 7 qty number(general)
+    +`</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const parts={
+    '[Content_Types].xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    '_rels/.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    'xl/workbook.xml':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xesc(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels':`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    'xl/styles.xml':styles,
+    'xl/worksheets/sheet1.xml':sheet,
+  };
+  const files=Object.keys(parts).map(name=>({name,str:parts[name]}));
+  return {parts, bytes:zipStore(files)};
+}
+function buildEstimateXlsx(){
+  const rows=buildRows(), t=computeTotals(rows);
+  const S={num:2,txt:3,qty:7,hd:1,tl:4,tv:5,ttl:6};
+  const T=v=>({v,t:'s',s:S.txt}), N=v=>({v,t:'n',s:S.num}), Q=v=>({v,t:'n',s:S.qty});
+  const aoa=[];
+  aoa.push([{v:'見 積 書',t:'s',s:S.ttl}]);
+  const kv=(k,v)=>aoa.push([{v:k,t:'s',s:0},{v:v||'',t:'s',s:0}]);
+  kv('工事名', estimate.head.name); kv('宛先', estimate.head.to);
+  aoa.push([{v:'見積番号',t:'s',s:0},{v:estimate.head.no||'',t:'s',s:0},{v:'見積日',t:'s',s:0},{v:estimate.head.date||'',t:'s',s:0}]);
+  aoa.push([]);
+  const HD=['No','記号/対象','分類','品目','規格・仕様','施工条件','数量','単位','材料費','労務費','経費','複合単価','金額','備考'];
+  aoa.push(HD.map(h=>({v:h,t:'s',s:S.hd})));
+  let i=0;
+  rows.forEach(r=>{ if(r.off) return; i++; const price=r.rec?r.rec.composite_price:0; const amt=(r.rec&&r.qty!=null)?rnd(r.qty*price):null;
+    aoa.push([ N(i), T(r.label), T(r.cat), T(r.sel?r.sel.name:''), T(r.sel?r.sel.spec:''), T(r.sel?(r.sel.work||''):''),
+      (r.qty!=null?Q(r.qty):T('')), T(r.unit),
+      (r.rec&&r.qty!=null?N(rnd(r.qty*r.rec.material_cost)):T('')),
+      (r.rec&&r.qty!=null?N(rnd(r.qty*r.rec.labor_cost)):T('')),
+      (r.rec&&r.qty!=null?N(rnd(r.qty*r.rec.expense)):T('')),
+      N(price), (amt!=null?N(amt):T('')), T(r.rec?'':'未マッチ') ]); });
+  aoa.push([]);
+  const tl=(k,v)=>{ const row=new Array(12).fill(null); row[11]={v:k,t:'s',s:S.tl}; row[12]={v:v,t:'n',s:S.tv}; aoa.push(row); };
+  tl('材料費計',t.mat); tl('労務費計',t.lab); tl('経費計',t.exp); tl('直接工事費',t.direct);
+  if(t.site) tl('現場管理費('+estimate.opts.siteRate+'%)',t.site);
+  if(t.admin) tl('一般管理費('+estimate.opts.adminRate+'%)',t.admin);
+  if(t.discount) tl('値引',-t.discount);
+  tl('消費税('+estimate.opts.taxRate+'%)',t.tax); tl('見積合計',t.total);
+  aoa.push([]);
+  aoa.push([{v:'※単価=複合単価(材+労+直接経費)。丸めにより内訳計と金額は一致しないことがあります。',t:'s',s:0}]);
+  aoa.push([{v:'※現場管理費・一般管理費は工事全体割増で、複合単価内の経費とは二重計上ではありません。',t:'s',s:0}]);
+  const cols=[4,16,14,18,20,12,7,5,9,9,9,10,11,9];
+  const merges=['A1:N1'];
+  return buildXlsx('見積書', aoa, cols, merges);
+}
+function exportEstimateXLSX(){
+  if(!MASTER_IDX){ toast('先に単価マスタを読み込んでください'); return; }
+  try{
+    const {bytes}=buildEstimateXlsx();
+    dl(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'mitsumori_'+ts()+'.xlsx');
+    toast('見積Excel(.xlsx)を書き出しました');
+  }catch(err){ console.error(err); toast('Excel書き出しに失敗しました'); }
+}
 
 // ============ 完成図の書き出し（DXF/JWW/印刷 / Step E） ============
 // 方針: シンボルSVG定義を実行時にCAD中間表現へ変換し、同一の中間表現から
@@ -2720,7 +2826,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.12', APP_DATE='2026-07-08';
+const APP_VERSION='0.13', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
