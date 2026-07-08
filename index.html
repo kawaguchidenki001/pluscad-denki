@@ -748,8 +748,8 @@ function renderSel(){
 }
 document.getElementById('sel-rotL').onclick=()=>rotateSel(-15);
 document.getElementById('sel-rotR').onclick=()=>rotateSel(15);
-document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; const uid=selUid; placed=placed.filter(x=>x.uid!==uid); wires=wires.filter(w=>w.a!==uid&&w.b!==uid); placed.forEach(x=>{ if(x.controls) x.controls=x.controls.filter(u=>u!==uid); }); selUid=null; renderSyms(); renderSel(); renderTally(); renderWireInfo(); };
-function rotateSel(d){ const p=placed.find(x=>x.uid===selUid); if(!p)return; p.rot=(p.rot+d)%360; renderSyms(); }
+document.getElementById('sel-del').onclick=()=>{ if(selUid==null)return; if(assignMode) endAssign(); const uid=selUid; placed=placed.filter(x=>x.uid!==uid); wires=wires.filter(w=>w.a!==uid&&w.b!==uid); placed.forEach(x=>{ if(x.controls) x.controls=x.controls.filter(u=>u!==uid); }); selUid=null; renderSyms(); renderSel(); renderTally(); renderWireInfo(); };
+function rotateSel(d){ if(assignMode)return; const p=placed.find(x=>x.uid===selUid); if(!p)return; p.rot=(p.rot+d)%360; renderSyms(); }
 // 種別の色変更（同種の全シンボルに反映）
 el('sel-color').addEventListener('input',e=>{ const p=placed.find(x=>x.uid===selUid); if(!p)return; typeColors[p.type]=e.target.value; refreshColors(p.type); });
 function refreshColors(type){
@@ -761,9 +761,10 @@ function refreshAllPaletteColors(){ document.querySelectorAll('.palbtn').forEach
 el('sel-step').addEventListener('input',e=>{ const v=parseFloat(e.target.value); if(isFinite(v)&&v>0) copyStep=v; });
 // 方向コピー（較正時mm→px換算、未較正はpx）
 function copyDir(dx,dy){
+  if(assignMode) return;                     // 割当中はコピー無効（選択の乖離防止）
   const p=placed.find(x=>x.uid===selUid); if(!p)return;
   const stepPx=(mmPerPx!=null)?(copyStep/mmPerPx):copyStep;
-  const meta={rot:p.rot}; if(p.controls) meta.controls=p.controls.slice();
+  const meta={rot:p.rot};                    // controlsは引き継がない（複製スイッチの二重結線を防止＝未割当で最寄り結線）
   const nx=p.x+dx*stepPx, ny=p.y+dy*stepPx;
   const uid=pushSymbol(p.type,nx,ny,meta);
   selUid=uid; renderSyms(); renderSel(); renderTally();
@@ -807,7 +808,7 @@ let dragSym=null, dragMoved=false, panStart=null;
 stage.addEventListener('pointerdown',ev=>{
   if(calibMode){ handleCalibClick(ev); return; }
   if(layoutMode){ handleLayoutClick(ev); return; }
-  if(assignMode){ return; } // 割当中の空白タップは無視（選択解除しない。照明タップはsym側で処理）
+  // 割当中：照明タップはsym側。空白はパン可（下のpointerupで選択解除しない）。curToolはnullなので配置には落ちない。
   if(wireMode && wirePendA!=null){ wirePendA=null; renderSyms(); } // 空白タップで結線1点目を解除（パンは継続）
   if(curTool){ // 配置モード：置く
     const w=toWorld(ev.clientX,ev.clientY);
@@ -831,7 +832,7 @@ stage.addEventListener('pointermove',ev=>{
 });
 stage.addEventListener('pointerup',ev=>{
   if(dragSym){ dragSym=null; renderTally(); if(dragMoved) renderWireInfo(); }
-  if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y); if(moved<4){ selUid=null; renderSyms(); renderSel(); } panStart=null; stage.classList.remove('panning'); }
+  if(panStart){ const moved=Math.abs(ev.clientX-panStart.x)+Math.abs(ev.clientY-panStart.y); if(moved<4 && !assignMode){ selUid=null; renderSyms(); renderSel(); } panStart=null; stage.classList.remove('panning'); }
 });
 function startDragSym(ev,uid){
   if(curTool||calibMode||layoutMode||wireMode)return;
@@ -959,7 +960,7 @@ function paintLayoutLayer(rubberEnd){
       h+=`<rect class="layoutrect" x="${rc.x0}" y="${rc.y0}" width="${rc.w}" height="${rc.h}"/>`;
       if(layoutDraft.nx*layoutDraft.ny<=GHOST_CAP){  // 過大時はゴースト省略（フリーズ防止）
         computeGrid(rc,layoutDraft.nx,layoutDraft.ny).forEach(pt=>{
-          h+=`<g class="ghost" transform="translate(${pt.x},${pt.y})" style="color:${s?s.color:'#E8B23A'}"><g transform="translate(-20,-20)"><use href="#sym-${layoutDraft.type}"/></g></g>`;
+          h+=`<g class="ghost" transform="translate(${pt.x},${pt.y})" style="color:${colorOf(layoutDraft.type)}"><g transform="translate(-20,-20)"><use href="#sym-${layoutDraft.type}"/></g></g>`;
         });
       }
     } else if(layoutPts.length===1 && rubberEnd){
@@ -1249,7 +1250,7 @@ const SYMMAP={
   chande:{cats:['照明器具'],kw:['シャンデリヤ'],unit:'個'},
   bracket:{cats:['照明器具'],kw:['ブラケット'],unit:'個'},
   exit:{cats:['照明器具'],kw:['誘導灯'],unit:'個'},
-  rail:{cats:['照明器具','電線管・ダクト・線ぴ'],kw:['ライティングダクト'],unit:'ｍ'},
+  rail:{cats:['照明器具'],kw:['ライティングレール'],unit:'本'},  // 点シンボル=長さ不明。既定は未マッチ(要選択)にして「個数×m単価」の誤計上を防ぐ
   spot:{cats:['照明器具'],kw:['スポット'],unit:'個'},
   emg_inc:{cats:['照明器具'],kw:['非常用'],unit:'個'},
   emg_fl:{cats:['照明器具'],kw:['非常用'],unit:'個'},
@@ -1889,6 +1890,7 @@ function saveJSON(){
 }
 function loadState(file){
   if(wireMode) endWireMode();
+  if(assignMode) endAssign();
   const r=new FileReader();
   r.onload=()=>{ try{
     const st=JSON.parse(r.result);
@@ -1936,7 +1938,7 @@ document.getElementById('btn-open').onclick=()=>document.getElementById('file-ba
 document.getElementById('btn-save').onclick=saveJSON;
 document.getElementById('btn-load').onclick=()=>document.getElementById('file-load').click();
 document.getElementById('btn-csv').onclick=exportCSV;
-document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length)&&!confirm('配置・配線をすべて消去しますか？'))return; placed=[]; rooms=[]; wires=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); };
+document.getElementById('btn-clear').onclick=()=>{ if((placed.length||rooms.length||wires.length)&&!confirm('配置・配線をすべて消去しますか？'))return; if(assignMode) endAssign(); placed=[]; rooms=[]; wires=[]; selUid=null; renderSyms(); renderSel(); renderTally(); paintLayoutLayer(); renderWireInfo(); };
 document.getElementById('file-base').addEventListener('change',e=>{ if(e.target.files[0])loadFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('file-load').addEventListener('change',e=>{ if(e.target.files[0])loadState(e.target.files[0]); e.target.value=''; });
 document.getElementById('btn-sample').onclick=()=>{ document.getElementById('uploader').style.display='none'; setBaseSize(1600,1100); clearBase(); fitView(); };
