@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>電気図 配置・拾い（試作 α-MVP）</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#191C22">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="電気図拾い">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
 <style>
   :root{
     --paper:#FBFAF7; --ink:#2B2F36;
@@ -136,6 +144,11 @@
 
   /* ---- バージョン表示・保存管理 ---- */
   #uploader-ver{font-size:12px;color:var(--txt-dim);font-weight:400}
+  #autosave-banner{width:min(560px,86vw);box-sizing:border-box;display:flex;align-items:center;gap:10px;background:#2a2410;border:1px solid #6b5a1e;border-radius:10px;padding:10px 12px}
+  #autosave-banner .asmsg{flex:1;min-width:0;font-size:12px;color:#f0e2b0;line-height:1.4}
+  #autosave-banner button{flex:none;border:1px solid #8a7420;background:#4a3f14;color:#ffe9a8;border-radius:7px;padding:8px 12px;font-size:12px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #autosave-banner button#as-restore{background:var(--redline);border-color:var(--redline);color:#fff}
+  #autosave-banner button#as-dismiss{padding:8px 10px;color:#c9be92}
   #uploader-saves{width:min(560px,86vw);background:var(--panel2);border:1px solid var(--panel-line);border-radius:12px;padding:12px 14px}
   #uploader-saves .savetit{font-size:12px;font-weight:700;color:var(--txt-dim);margin-bottom:8px}
   #uploader-projlist,#proj-list{max-height:min(46vh,340px);overflow-y:auto}
@@ -417,6 +430,7 @@
   <!-- アップローダ -->
   <div id="uploader">
     <div class="big">📐 電気図 配置・拾い <span id="uploader-ver"></span></div>
+    <div id="autosave-banner" style="display:none"></div>
     <div id="drop">
       <div class="ic">⬇</div>
       PDF / 画像(PNG・JPG) をここにドロップ<br>またはクリックで選択
@@ -830,6 +844,7 @@ async function loadFile(file){
   document.getElementById('uploader').style.display='none';
   fitView();
   resetHistory();
+  scheduleAutosave();     // 下敷き読込も自動保存対象
 }
 function loadImage(file){
   return new Promise(res=>{
@@ -935,6 +950,7 @@ function pushHistory(){
   history=history.slice(0,histIdx+1);                                // 分岐したredoは破棄
   history.push(s); if(history.length>HIST_MAX) history.shift();
   histIdx=history.length-1; updateUndoRedo();
+  scheduleAutosave();                                                // 編集のたびに自動保存（デバウンス）
 }
 function resetHistory(){ history=[snapDraw()]; histIdx=0; updateUndoRedo(); }
 function undo(){ if(histIdx>0){ histIdx--; applyDrawSnap(history[histIdx]); updateUndoRedo(); } }
@@ -1239,6 +1255,7 @@ document.getElementById('calib-ok').onclick=()=>{
   document.getElementById('scaleinfo').innerHTML=`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`;
   if(snapOn&&wasUncal&&gridMm<=100) gridMm=455;   // px仮設定のまま初回較正→mm既定へ（再較正では意図した間隔を保持）
   updateSnapUI();
+  scheduleAutosave();
   toast('縮尺を設定しました');
 };
 document.getElementById('calib-cancel').onclick=endCalib;
@@ -2331,13 +2348,38 @@ function projRowsHtml(list){
     `<div class="projrow"><div class="pj"><div class="pjn">${escHtml(p.name)}</div><div class="pjd">${fmtTs(p.ts)}</div></div>`+
     `<button class="pjopen" data-id="${escAttr(p.id)}">開く</button><button class="pjdel" data-id="${escAttr(p.id)}">🗑</button></div>`).join('');
 }
-function refreshProjLists(){ return idbAll().then(list=>{
+function refreshProjLists(){ return idbAll().then(all=>{
+  const list=all.filter(r=>r.id!==AUTO_ID);   // 自動保存スロットは一覧に出さない
   ['proj-list','uploader-projlist'].forEach(id=>{ const h=el(id); if(h) h.innerHTML=projRowsHtml(list); });
   document.querySelectorAll('.pjopen').forEach(x=>x.onclick=()=>openProject(x.dataset.id));
   document.querySelectorAll('.pjdel').forEach(x=>x.onclick=()=>deleteProject(x.dataset.id));
 }).catch(()=>{ ['proj-list','uploader-projlist'].forEach(id=>{ const h=el(id); if(h) h.innerHTML='<div class="projempty">ブラウザ内保存が使えません</div>'; }); }); }
 function openProjModal(){ refreshProjLists(); el('modal-proj').classList.add('show'); }
 function closeProjModal(){ el('modal-proj').classList.remove('show'); }
+
+// ============ 自動保存（うっかり閉じても復元） ============
+const AUTO_ID='__auto__';           // projectsストア内の予約ID（一覧には出さない）
+let autosaveT=null, autosaveReady=false;
+function scheduleAutosave(){ if(!autosaveReady) return; clearTimeout(autosaveT); autosaveT=setTimeout(doAutosave,1500); }
+function doAutosave(){
+  if(document.getElementById('uploader').style.display!=='none') return;   // 図面を開いていない間は保存しない
+  try{
+    idbPut({id:AUTO_ID, name:'(自動保存)', ts:Date.now(), data:buildState(), projId:currentProjId, projName:currentProjName}).catch(()=>{});
+  }catch(e){}
+}
+function autosaveHasContent(d){ return !!(d&&((d.placed&&d.placed.length)||(d.texts&&d.texts.length)||(d.rooms&&d.rooms.length)||(d.wires&&d.wires.length)||d.baseSrc)); }
+function checkAutosave(){
+  idbGet(AUTO_ID).then(rec=>{
+    if(!rec||!autosaveHasContent(rec.data)) return;
+    const b=el('autosave-banner'); if(!b) return;
+    const n=(rec.data.placed||[]).length, tn=(rec.data.texts||[]).length;
+    b.innerHTML=`<span class="asmsg">🕐 前回の作業が自動保存されています（${fmtTs(rec.ts)}／記号${n}・文字${tn}${rec.projName?'・'+escHtml(rec.projName):''}）</span>`
+      +`<button id="as-restore">前回の続きから</button><button id="as-dismiss" title="閉じる">✕</button>`;
+    b.style.display='flex';
+    el('as-restore').onclick=()=>{ applyState(rec.data); currentProjId=rec.projId||null; currentProjName=rec.projName||''; b.style.display='none'; toast('前回の作業を復元しました'); };
+    el('as-dismiss').onclick=()=>{ b.style.display='none'; };
+  }).catch(()=>{});
+}
 function exportCSV(){
   const counts={}; placed.forEach(p=>counts[p.type]=(counts[p.type]||0)+1);
   let rows=[['分類','名称','数量','単位']];
@@ -2365,7 +2407,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.8', APP_DATE='2026-07-08';
+const APP_VERSION='0.9', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
@@ -2397,6 +2439,14 @@ stage.addEventListener('drop',e=>{ e.preventDefault(); const f=e.dataTransfer.fi
 // 初期化
 setBaseSize(1600,1100); renderTally(); refreshProjLists(); resetHistory();
 window.addEventListener('resize',()=>{ if(document.getElementById('uploader').style.display==='none')applyView(); });
+
+// PWA: Service Worker 登録（オフライン動作。http(s)配信時のみ有効、file://等は静かに無視）
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+// 自動保存：起動後に有効化し、前回の作業があれば復元バナーを表示
+autosaveReady=true;
+checkAutosave();
 </script>
 </body>
 </html>

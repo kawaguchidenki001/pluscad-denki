@@ -1,0 +1,17 @@
+{
+  "name": "電気図 配置・拾い",
+  "short_name": "電気図拾い",
+  "description": "PDF/画像を下敷きに電気シンボルを配置し、拾い・見積・完成図(DXF/JWW)まで行うブラウザ完結アプリ",
+  "lang": "ja",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#12151a",
+  "theme_color": "#191C22",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
