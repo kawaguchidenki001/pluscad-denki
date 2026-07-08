@@ -109,6 +109,9 @@
   #linebar button:hover,#freebar button:hover{background:var(--panel3)}
   #linebar button.wd,#freebar button.wd{width:auto;padding:0 11px;font-size:12px;font-weight:700}
   #linebar button.del,#freebar button.del{color:#f0a9a0;border-color:#5a3a36}
+  #freebar .grp{display:flex;align-items:center;gap:4px}
+  #freebar .lbl2{font-size:10px;color:var(--txt-dim);font-weight:700}
+  #freebar input.step{width:60px;height:32px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;border-radius:7px;text-align:right;font-family:var(--mono);font-size:12px;padding:0 6px}
 
   /* ---- 右：集計 ---- */
   #tally{width:280px;flex:none;background:var(--panel);border-left:1px solid var(--panel-line);color:var(--txt);display:flex;flex-direction:column}
@@ -445,6 +448,9 @@
       </div>
       <div id="freebar">
         <span class="lbl">作図線</span>
+        <div class="grp" title="複線の間隔"><span class="lbl2" id="free-distunit">複線mm</span><input id="free-dist" class="step" type="number" min="1" step="10" value="100"></div>
+        <button id="free-par" class="wd" title="左側へ平行複写（複線）">複線</button>
+        <button id="free-parB" class="wd" title="右側へ平行複写（複線）">逆</button>
         <button id="free-del" class="del" title="削除">🗑</button>
       </div>
 
@@ -904,6 +910,7 @@ function setTool(id){
   mselCancel();
   if(selSet.length){ mselClear(); renderSyms(); }   // 青枠の消し忘れ防止
   if(selTextUid!=null){ selTextUid=null; renderTexts(); }
+  clearFreeSel();
   curTool=id; selUid=null; renderSel();
   document.querySelectorAll('.palbtn').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
   stage.classList.toggle('placing',!!id && !calibMode);
@@ -953,6 +960,7 @@ function showSnapMark(x,y){ if(!snapg) return; const R=6;
     +`<rect x="${-R}" y="${-R}" width="${R*2}" height="${R*2}"/><line x1="${-R-3}" y1="0" x2="${R+3}" y2="0"/><line x1="0" y1="${-R-3}" x2="0" y2="${R+3}"/></g>`;
 }
 function hideSnapMark(){ if(snapg) snapg.innerHTML=''; }
+function capPtr(ev){ try{ stage.setPointerCapture(ev.pointerId); }catch(e){} }   // アクティブでないポインタ等で例外を出さない
 function gridSnapPt(x,y){ if(!snapOn) return {x,y}; const g=gridPx(); if(!(g>0.5)) return {x,y}; return {x:Math.round(x/g)*g, y:Math.round(y/g)*g}; }
 function snapPt(x,y){
   if(esnapOn){ const s=esnapNearest(x,y); if(s){ showSnapMark(s.x,s.y); return {x:s.x,y:s.y}; } hideSnapMark(); }
@@ -1328,6 +1336,7 @@ function renderSyms(){
       if(selSet.includes(+g.dataset.uid)){ startGroupDrag(ev); return; }   // 複数選択中の記号→一括ドラッグ
       if(selSet.length){ mselClear(); }                                    // 選択外の記号タップ→複数選択を解除して単独選択
       if(selTextUid!=null){ selTextUid=null; renderTexts(); }
+      clearFreeSel();
       startDragSym(ev, +g.dataset.uid);
     });
   });
@@ -1490,10 +1499,10 @@ function renderTexts(){
     g.addEventListener('pointerdown',ev=>{
       if(calibMode||layoutMode||curTool||textMode||mselMode||wireMode||assignMode||lineMode) return;  // モード中はstageへ委譲
       ev.stopPropagation();
-      selTextUid=+g.dataset.uid; selUid=null; mselClear();
+      selTextUid=+g.dataset.uid; selUid=null; mselClear(); clearFreeSel();
       renderSyms(); renderSel(); renderTexts();
       const t=texts.find(x=>x.uid===selTextUid);
-      textDrag={t,moved:false}; stage.setPointerCapture(ev.pointerId);
+      textDrag={t,moved:false}; capPtr(ev);
     });
   });
   renderTselbar();
@@ -1558,8 +1567,39 @@ function renderFree(){
       renderSyms(); renderSel(); renderTexts(); renderFree(); renderFreebar(); }); });
 }
 function renderFreebar(){ const bar=el('freebar'); if(!bar) return; const f=freelines.find(x=>x.uid===selFreeUid);
-  if(!f||lineMode){ bar.classList.remove('show'); return; } bar.classList.add('show'); }
+  if(!f||lineMode){ bar.classList.remove('show'); return; } bar.classList.add('show');
+  const u=el('free-distunit'); if(u) u.textContent=(mmPerPx!=null)?'複線mm':'複線px'; }
+function clearFreeSel(){ if(selFreeUid!=null){ selFreeUid=null; renderFree(); renderFreebar(); } }   // 他を選択/モード切替時に作図線選択を解除（バー残り防止）
 el('free-del').onclick=()=>{ if(selFreeUid==null)return; freelines=freelines.filter(f=>f.uid!==selFreeUid); selFreeUid=null; renderFree(); renderFreebar(); renderTally(); pushHistory(); };
+// 複線（平行複写）：各線分を距離dだけ左法線方向へオフセットし、隣接オフセット線の交点で接合（ミター）
+function _segDir(a,b){ const dx=b[0]-a[0], dy=b[1]-a[1], L=Math.hypot(dx,dy)||1; return [dx/L,dy/L]; }
+function _lineInt(p1,d1,p2,d2){ const den=d1[0]*d2[1]-d1[1]*d2[0]; if(Math.abs(den)<1e-9) return null; const t=((p2[0]-p1[0])*d2[1]-(p2[1]-p1[1])*d2[0])/den; return [p1[0]+d1[0]*t, p1[1]+d1[1]*t]; }
+function offsetPolyline(pts,d){
+  const n=pts.length; if(n<2) return null;
+  const dir=[], nrm=[];
+  for(let i=0;i<n-1;i++){ const u=_segDir(pts[i],pts[i+1]); dir.push(u); nrm.push([-u[1],u[0]]); }   // 左法線
+  const off=i=>[pts[i][0]+d*nrm[Math.min(i,n-2)][0], pts[i][1]+d*nrm[Math.min(i,n-2)][1]];
+  const out=[ off(0) ];
+  for(let i=1;i<n-1;i++){
+    const p1=[pts[i-1][0]+d*nrm[i-1][0], pts[i-1][1]+d*nrm[i-1][1]];
+    const p2=[pts[i][0]+d*nrm[i][0],     pts[i][1]+d*nrm[i][1]];
+    const ip=_lineInt(p1,dir[i-1], p2,dir[i]);
+    out.push(ip || p2);       // 平行(交点なし)は法線オフセット点で代用
+  }
+  out.push(off(n-1));
+  return out.map(p=>[Math.round(p[0]),Math.round(p[1])]);
+}
+function offsetSelectedFree(sign){
+  const f=freelines.find(x=>x.uid===selFreeUid); if(!f) return;
+  const dv=parseFloat(el('free-dist')&&el('free-dist').value); if(!isFinite(dv)||dv<=0){ toast('複線の間隔を入力してください'); return; }
+  const dpx=(mmPerPx!=null)?(dv/mmPerPx):dv;
+  const np=offsetPolyline(f.pts, sign*dpx); if(!np) return;
+  const uid=freeSeq++; freelines.push({uid, pts:np}); selFreeUid=uid;
+  renderFree(); renderFreebar(); renderTally(); pushHistory();
+  toast(`複線を作成しました（${dv}${mmPerPx!=null?'mm':'px'}）`);
+}
+el('free-par').onclick=()=>offsetSelectedFree(1);
+el('free-parB').onclick=()=>offsetSelectedFree(-1);
 
 // ============ 複数選択（範囲選択→一括操作） ============
 function mselClear(){ if(selSet.length) selSet=[]; renderMselbar(); }
@@ -1627,7 +1667,7 @@ el('msel-dsH').onclick=()=>mselAlign('dsH'); el('msel-dsV').onclick=()=>mselAlig
 function startGroupDrag(ev){
   const w=toWorld(ev.clientX,ev.clientY);
   groupDrag={sx:w.x, sy:w.y, items:mselItems().map(p=>({p,ox:p.x,oy:p.y})), moved:false};
-  stage.setPointerCapture(ev.pointerId);
+  capPtr(ev);
 }
 
 // ============ ポインタ操作（配置/選択/移動/パン/較正） ============
@@ -1641,7 +1681,7 @@ stage.addEventListener('pointerdown',ev=>{
   if(layoutMode){ handleLayoutClick(ev); return; }
   if(mselMode){ // 範囲選択：矩形の始点
     mselStart=toWorld(ev.clientX,ev.clientY); mselRubber(mselStart,mselStart);
-    stage.setPointerCapture(ev.pointerId); return;
+    capPtr(ev); return;
   }
   if(textMode){ // 文字配置
     const w=toWorld(ev.clientX,ev.clientY), sp=snapPt(w.x,w.y);
@@ -1662,7 +1702,7 @@ stage.addEventListener('pointerdown',ev=>{
   // 空白タップ＝パン開始＋選択解除
   panStart={x:ev.clientX,y:ev.clientY,tx,ty};
   stage.classList.add('panning');
-  stage.setPointerCapture(ev.pointerId);
+  capPtr(ev);
 });
 stage.addEventListener('pointermove',ev=>{
   if(curTool && esnapOn && !dragSym && !groupDrag && !panStart && !mselStart && !textDrag){   // 配置前プレビュー：読取点マーカー
@@ -1707,7 +1747,7 @@ function startDragSym(ev,uid){
   if(curTool||calibMode||layoutMode||wireMode)return;
   selUid=uid; renderSyms(); renderSel();
   dragSym=placed.find(x=>x.uid===uid); dragMoved=false;
-  stage.setPointerCapture(ev.pointerId);
+  capPtr(ev);
 }
 stage.addEventListener('pointercancel',()=>{   // OSジェスチャ等で中断→ドラッグ状態を残さない（残るとパンが乗っ取られる）
   mselStart=null; if(mselg&&mselMode) mselg.innerHTML='';
@@ -3183,7 +3223,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.21', APP_DATE='2026-07-08';
+const APP_VERSION='0.22', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
