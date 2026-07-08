@@ -163,6 +163,14 @@
   .projempty{font-size:12px;color:var(--txt-dim);text-align:center;padding:16px 4px}
   #modal-proj{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:41;display:none;align-items:center;justify-content:center}
   #modal-proj.show{display:flex}
+  #modal-pdfpage{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:42;display:none;align-items:center;justify-content:center}
+  #modal-pdfpage.show{display:flex}
+  #modal-pdfpage .mbox{width:min(720px,94vw)}
+  #pdfpage-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:60vh;overflow:auto;padding:4px 2px;margin:8px 0}
+  .pdfthumb{background:var(--panel);border:1px solid var(--panel-line);border-radius:8px;padding:6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .pdfthumb.cur{border-color:var(--redline);box-shadow:0 0 0 2px var(--redline)}
+  .pdfthumb img{width:100%;height:auto;background:#fff;border-radius:3px;display:block}
+  .pdfthumb span{font-size:12px;font-weight:700;color:var(--txt)}
   #modal-proj .mbox{width:min(480px,92vw)}
 
   /* ---- 自動配灯（Step B） ---- */
@@ -278,6 +286,7 @@
     <button id="btn-undo" title="戻る（元に戻す）" disabled>↶戻る</button>
     <button id="btn-redo" title="進む（やり直し）" disabled>↷進む</button>
     <button id="btn-open">図面を開く</button>
+    <button id="btn-pdfpage" style="display:none" title="PDFのページを選ぶ／切替える">ページ</button>
     <button id="btn-calib">縮尺を設定</button>
     <button id="btn-layout">自動配灯</button>
     <button id="btn-autowire">自動配線</button>
@@ -464,6 +473,15 @@
         <button id="proj-importfile">ファイルから読込</button>
         <button id="proj-close" class="acc">閉じる</button>
       </div>
+    </div>
+  </div>
+
+  <!-- PDFページ選択モーダル -->
+  <div id="modal-pdfpage">
+    <div class="mbox">
+      <h4 id="pdfpage-title">ページを選択</h4>
+      <div id="pdfpage-grid"><div class="projempty">読込中…</div></div>
+      <div class="btns"><button id="pdfpage-close" class="acc">閉じる</button></div>
     </div>
   </div>
 
@@ -839,7 +857,7 @@ function setBaseSize(w,h){ baseW=w; baseH=h; baseEl.style.width=w+'px'; baseEl.s
 function setBaseImage(dataURL,w,h){ baseSrc=dataURL; baseVec=null; baseg.innerHTML=''; baseimg.src=dataURL; setBaseSize(w,h); applyBaseOpacity(); baseToken++; }
 function applyBaseOpacity(){ baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
 el('base-op').addEventListener('input',e=>{ baseOpacity=(+e.target.value||100)/100; baseimg.style.opacity=baseOpacity; baseg.style.opacity=baseOpacity; });
-function clearBase(){ baseSrc=null; baseVec=null; baseg.innerHTML=''; baseimg.removeAttribute('src'); setBaseSize(1200,850); baseToken++; }
+function clearBase(){ baseSrc=null; baseVec=null; baseg.innerHTML=''; baseimg.removeAttribute('src'); setBaseSize(1200,850); baseToken++; pdfDocCur=null; if(el('btn-pdfpage')) updatePdfPageBtn(); }
 function applyBaseVecOpacity(){ baseg.style.opacity=baseOpacity; const s=el('base-op'); if(s) s.value=Math.round(baseOpacity*100); }
 
 // ── DXF/JWW をベクター下敷きに（実mm座標＝較正不要） ──
@@ -938,6 +956,7 @@ function setBaseVec(dxfText){
 
 async function loadFile(file){
   const name=(file.name||'').toLowerCase();
+  pdfDocCur=null; updatePdfPageBtn();      // 別ファイル読込開始→旧PDFのページ切替を破棄しボタンを隠す（全経路をカバー）
   if(name.endsWith('.pdf')){ await loadPDF(file); }
   else if(name.endsWith('.dxf')||name.endsWith('.jww')){ const okc=await loadCAD(file,name); if(!okc) return; }
   else if(file.type.startsWith('image/')||/\.(png|jpe?g|gif|webp|bmp)$/.test(name)){ await loadImage(file); }
@@ -975,17 +994,68 @@ async function loadCAD(file, name){
     return true;
   }catch(err){ console.error(err); toast('CADファイルを読めませんでした'); return false; }
 }
+let pdfDocCur=null, pdfPageCur=1;         // セッション中の複数ページPDF（ページ切替用）
 async function loadPDF(file){
   if(!window.pdfjsLib){ toast('PDF描画ライブラリの読込待ち…もう一度お試しください'); return; }
   pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   const buf=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
-  const page=await pdf.getPage(1);
-  const vp=page.getViewport({scale:2.5}); // 高解像度で下敷き化
+  pdfDocCur=await pdfjsLib.getDocument({data:buf}).promise;
+  await renderPdfPage(1);                 // まず1ページ目を下敷きに
+  updatePdfPageBtn();
+  if(pdfDocCur.numPages>1) setTimeout(openPdfPagePicker,150);   // 複数ページなら選択を促す
+}
+// 指定ページを下敷きに描画（高解像度）
+async function renderPdfPage(n){
+  if(!pdfDocCur) return;
+  n=Math.max(1,Math.min(pdfDocCur.numPages,n|0));
+  const page=await pdfDocCur.getPage(n);
+  const vp=page.getViewport({scale:2.5});
   const cv=document.createElement('canvas'); cv.width=vp.width; cv.height=vp.height;
   await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
   setBaseImage(cv.toDataURL('image/png'),vp.width,vp.height);
+  pdfPageCur=n; updatePdfPageBtn();
 }
+function updatePdfPageBtn(){
+  const b=el('btn-pdfpage'); if(!b) return;
+  const multi=pdfDocCur && pdfDocCur.numPages>1;
+  b.style.display=multi?'':'none';
+  if(multi) b.textContent=`ページ ${pdfPageCur}/${pdfDocCur.numPages}`;
+}
+// ページ選択モーダル（サムネイル一覧）
+let pdfPickerBusy=false;
+async function openPdfPagePicker(){
+  if(!pdfDocCur||pdfDocCur.numPages<2||pdfPickerBusy) return;
+  pdfPickerBusy=true;
+  const doc=pdfDocCur;                        // 生成中に別ファイルへ差し替わったら破棄する（レース対策）
+  try{
+    const N=doc.numPages, CAP=60, grid=el('pdfpage-grid');
+    el('pdfpage-title').textContent=`ページを選択（全${N}ページ${N>CAP?`・先頭${CAP}のみ表示`:''}）`;
+    grid.innerHTML='<div class="projempty">サムネイル生成中…</div>';
+    el('modal-pdfpage').classList.add('show');
+    const frag=[];
+    for(let n=1;n<=Math.min(N,CAP);n++){
+      if(pdfDocCur!==doc){ el('modal-pdfpage').classList.remove('show'); return; }   // 差し替わった→中断
+      try{
+        const page=await doc.getPage(n);
+        const vp=page.getViewport({scale:1});
+        const s=Math.min(150/vp.width, 200/vp.height);
+        const v2=page.getViewport({scale:s});
+        const cv=document.createElement('canvas'); cv.width=Math.ceil(v2.width); cv.height=Math.ceil(v2.height);
+        await page.render({canvasContext:cv.getContext('2d'),viewport:v2}).promise;
+        frag.push(`<button class="pdfthumb${n===pdfPageCur?' cur':''}" data-n="${n}"><img src="${cv.toDataURL('image/png')}" alt="p${n}"><span>${n}</span></button>`);
+      }catch(e){ frag.push(`<button class="pdfthumb" data-n="${n}"><span>${n}</span></button>`); }
+      if(n%4===0 && pdfDocCur===doc) grid.innerHTML=frag.join('');   // 逐次表示
+    }
+    if(pdfDocCur!==doc){ el('modal-pdfpage').classList.remove('show'); return; }
+    grid.innerHTML=frag.join('');
+    grid.querySelectorAll('.pdfthumb').forEach(b=>b.onclick=async()=>{
+      el('modal-pdfpage').classList.remove('show');
+      await renderPdfPage(+b.dataset.n); fitView(); scheduleAutosave();
+    });
+  } finally { pdfPickerBusy=false; }         // 例外/中断でも必ず解放（別PDFのピッカーがブロックされない）
+}
+el('btn-pdfpage').onclick=openPdfPagePicker;
+el('pdfpage-close').onclick=()=>el('modal-pdfpage').classList.remove('show');
 
 // ============ シンボル配置・描画 ============
 // placed へ 1点追加し uid を返す（描画しない＝一括配置用）
@@ -2468,10 +2538,12 @@ function applyState(st){
   snapOn=!!st.snapOn; gridMm=st.gridMm||455;
   estimate=st.estimate||defaultEstimate();
   typeColors=st.typeColors||{}; baseOpacity=(st.baseOpacity!=null?st.baseOpacity:1); copyStep=st.copyStep||1000;
+  pdfDocCur=null;                          // 復元後はライブPDFなし（保存済みは描画済みページ画像）
   let vec=false;
   if(st.baseVec&&st.baseVec.text){ try{ setBaseVec(st.baseVec.text); vec=true; mmPerPx=1; }catch(e){ setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); applyBaseOpacity(); } }
   else if(st.baseSrc){ setBaseImage(st.baseSrc,st.baseW,st.baseH); }
   else { setBaseSize(st.baseW||1200,st.baseH||850); clearBase(); applyBaseOpacity(); }
+  updatePdfPageBtn();
   document.getElementById('uploader').style.display='none';
   if(!vec) document.getElementById('scaleinfo').innerHTML=mmPerPx?`縮尺：<b>1px = ${mmPerPx.toFixed(2)}mm</b>`:'縮尺：未設定';
   refreshAllPaletteColors();
@@ -2589,7 +2661,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.10', APP_DATE='2026-07-08';
+const APP_VERSION='0.11', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
