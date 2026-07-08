@@ -301,6 +301,8 @@
   #expmenu .note{font-size:10px;color:var(--txt-dim);padding:7px 14px 9px;line-height:1.5}
   #expmenu .expchk{display:flex;align-items:center;gap:7px;padding:9px 14px;font-size:11px;color:var(--txt);border-bottom:1px solid var(--panel-line);cursor:pointer;line-height:1.4}
   #expmenu .expchk input{width:15px;height:15px;flex:none}
+  #expmenu .exprow{display:flex;align-items:center;gap:6px;padding:9px 14px;font-size:11px;color:var(--txt);border-bottom:1px solid var(--panel-line);flex-wrap:wrap}
+  #expmenu .exprow select{flex:1;min-width:74px;height:26px;background:var(--panel);color:#fff;border:1px solid var(--panel-line);border-radius:6px;font-size:11px;font-family:var(--jp)}
   #enote{flex:none;font-size:10.5px;color:var(--txt-dim);padding:7px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
   #efoot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
 </style>
@@ -331,7 +333,15 @@
         <button id="exp-jww">完成図 JWW（.jww）</button>
         <button id="exp-print">印刷（PDF保存）</button>
         <label class="expchk"><input type="checkbox" id="exp-frame" checked>図枠・タイトル欄・凡例表を付ける（印刷）</label>
-        <div class="note">DXF/JWWは較正済み実寸[mm]で出力。JWWは自動縮尺（A3基準）。</div>
+        <div class="exprow"><span>用紙</span><select id="print-paper">
+          <option value="a4l">A4 横</option><option value="a4p">A4 縦</option>
+          <option value="a3l">A3 横</option><option value="a3p">A3 縦</option>
+        </select><span>縮尺</span><select id="print-scale">
+          <option value="fit">自動フィット</option>
+          <option value="20">1:20</option><option value="30">1:30</option><option value="50">1:50</option>
+          <option value="100">1:100</option><option value="200">1:200</option><option value="500">1:500</option>
+        </select></div>
+        <div class="note">DXF/JWWは較正済み実寸[mm]で出力。JWWは自動縮尺（A3基準）。縮尺指定の印刷は「縮尺を設定」済みが必要（未設定なら自動フィット）。</div>
       </div>
     </span>
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
@@ -2856,10 +2866,26 @@ async function exportJWW(){
     toast(`JWWを書き出しました（1/${r.scaleDenom}・${r.count}要素）`);
   }catch(err){ console.error(err); toast('JWW書き出しに失敗しました（http配信でお試しください）'); }
 }
+const PAPER_MM={a4l:[297,210], a4p:[210,297], a3l:[420,297], a3p:[297,420]};   // [幅,高さ]mm
+// 印刷レイアウトの決定（副作用なし・テスト可能）。固定縮尺は較正必須。未較正/フィットは幅フィット。
+function printLayout(vw,vh){
+  const scaleSel=(el('print-scale')&&el('print-scale').value)||'fit';
+  const paperKey=(el('print-paper')&&el('print-paper').value)||'a4l';
+  const S=(scaleSel==='fit')?null:parseFloat(scaleSel);
+  if(S && mmPerPx==null) return {kind:'fit', warn:'nocal'};
+  if(S){ const paper=PAPER_MM[paperKey]||PAPER_MM.a4l, margin=8;
+    const printW=vw*mmPerPx/S, printH=vh*mmPerPx/S;             // 紙面上の物理サイズmm（1:S）
+    const fits=(printW<=paper[0]-margin*2+0.5)&&(printH<=paper[1]-margin*2+0.5);
+    return {kind:'scale', paper, printW, printH, margin, fits, S}; }
+  return {kind:'fit'};
+}
 function exportPrint(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開いてください'); return; }
   if(!placed.length&&!texts.length&&!baseSrc&&!baseVec){ toast('印刷する内容がありません'); return; }
   const {svg,vw,vh}=buildPrintSVG();
+  const mode=printLayout(vw,vh);
+  if(mode.warn==='nocal') toast('縮尺指定の印刷には「縮尺を設定」が必要です。自動フィットで印刷します');
+  else if(mode.kind==='scale' && !mode.fits) toast(`図面が用紙に収まりません（1:${mode.S}で ${Math.round(mode.printW)}×${Math.round(mode.printH)}mm）。縮尺を上げるか用紙を大きくしてください`);
   const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
   const img=new Image();
   img.onload=()=>{
@@ -2871,9 +2897,17 @@ function exportPrint(){
     if(!durl||durl.length<100){ toast('印刷用画像の生成に失敗しました（図面が大きすぎます）'); return; }
     const win=window.open('','_blank');
     if(!win){ toast('ポップアップがブロックされました'); return; }
+    let style, imgStyle;
+    if(mode.kind==='scale'){
+      style=`@page{size:${mode.paper[0]}mm ${mode.paper[1]}mm;margin:${mode.margin}mm}html,body{margin:0}img{display:block;margin:0 auto}`;
+      imgStyle=`width:${mode.printW}mm;height:${mode.printH}mm`;
+    } else {
+      style='@page{margin:8mm}body{margin:0}img{width:100%}';
+      imgStyle='';
+    }
     win.document.write('<!doctype html><html><head><title>印刷（ブラウザの印刷でPDF保存できます）</title>'
-      +'<style>@page{margin:8mm}body{margin:0}img{width:100%}</style></head><body>'
-      +'<img src="'+durl+'" onload="setTimeout(function(){window.print()},250)"></body></html>');
+      +'<style>'+style+'</style></head><body>'
+      +'<img'+(imgStyle?' style="'+imgStyle+'"':'')+' src="'+durl+'" onload="setTimeout(function(){window.print()},250)"></body></html>');
     win.document.close();
   };
   img.onerror=()=>{ URL.revokeObjectURL(url); toast('印刷用画像の生成に失敗しました'); };
@@ -3047,7 +3081,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.18', APP_DATE='2026-07-08';
+const APP_VERSION='0.19', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
