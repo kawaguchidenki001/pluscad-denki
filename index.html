@@ -280,6 +280,28 @@
   /* ---- 見積（Step D） ---- */
   #modal-estimate{position:fixed;inset:0;z-index:60;background:var(--panel);display:none;flex-direction:column;color:var(--txt)}
   #modal-estimate.show{display:flex}
+  /* 盤表モーダル（v0.26） */
+  #modal-panel{position:fixed;inset:0;z-index:61;background:var(--panel);display:none;flex-direction:column;color:var(--txt)}
+  #modal-panel.show{display:flex}
+  #modal-panel .ehead{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--panel-line)}
+  #modal-panel .ehead h3{margin:0;font-size:15px}
+  #modal-panel .pspacer{flex:1}
+  #modal-panel .ehead button,#ps-foot button{border:1px solid var(--panel-line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #ps-foot button.acc{background:var(--acc,#2d7d5a);border-color:var(--acc,#2d7d5a);color:#fff}
+  #ps-body{flex:1;overflow:auto;padding:12px 16px}
+  #ps-note{flex:none;font-size:10.5px;color:var(--txt-dim);padding:8px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
+  #ps-foot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
+  table.pstab{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.pstab th,table.pstab td{border:1px solid var(--panel-line);padding:6px 8px;text-align:left;vertical-align:middle}
+  table.pstab th{background:var(--panel2);color:var(--txt-dim);font-size:11px;position:sticky;top:0}
+  table.pstab td.n{text-align:right;font-family:var(--mono)}
+  table.pstab .psname{width:150px;background:var(--panel);border:1px solid var(--panel-line);border-radius:6px;color:#fff;padding:5px 7px;font-size:12px;font-family:var(--jp)}
+  table.pstab .cdotp{width:11px;height:11px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+  table.pstab .pswarn{color:#f0a9a0;font-size:11px;font-weight:700}
+  table.pstab tr.over td{background:rgba(226,69,43,.08)}
+  #ps-empty{color:var(--txt-dim);font-size:13px;padding:20px 4px}
+  #wireinfo .psbtn{margin:6px 0 0;width:100%;background:var(--panel2);border:1px solid var(--panel-line);color:var(--txt);border-radius:8px;padding:7px;font-size:11.5px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #wireinfo .psbtn:hover{background:var(--panel3)}
   #modal-estimate .ehead{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--panel-line)}
   #modal-estimate .ehead h3{margin:0;font-size:15px}
   .echip{font-size:11px;font-family:var(--mono);padding:4px 9px;border-radius:6px;border:1px solid var(--panel-line);background:var(--panel2);color:var(--txt-dim)}
@@ -633,6 +655,20 @@
     </div>
   </div>
 
+  <!-- 盤表モーダル（v0.26） -->
+  <div id="modal-panel">
+    <div class="ehead">
+      <h3>盤表（回路一覧）</h3>
+      <span class="pspacer"></span>
+      <button id="ps-close">閉じる</button>
+    </div>
+    <div id="ps-body"></div>
+    <div id="ps-note">※想定負荷[VA]は種別ごとの目安値（コンセント=150VA/口、照明=器具別、内線規程を参考にした概算）です。実負荷は器具仕様でご確認ください。回路番号・名称は「自動配線」を再実行すると振り直されます。／警告：合計が20A(2000VA)を超える／専用回路が望ましい機器を含む回路に表示。</div>
+    <div id="ps-foot">
+      <button id="ps-csv" class="acc">盤表CSV</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
 
@@ -799,7 +835,7 @@ function defaultEstimate(){
   return { head:{name:'',to:'',addr:'',no:'',date:''},
     opts:{siteRate:0, adminRate:0, discount:0, taxRate:10, roundDown:true, showBreak:false},
     lines:{},   // [記号id]: {cat,name,spec,work,qty,off,user}（ユーザー上書きのみ保持）
-    wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}, circuitSpec:{}, lineType:{}} };  // circuitSpec:回路→ケーブルkey, lineType:回路→線種key
+    wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}, circuitSpec:{}, lineType:{}, circuitName:{}} };  // circuitSpec:回路→ケーブルkey, lineType:回路→線種key, circuitName:回路→用途名
 }
 let estimate = defaultEstimate();
 let estPendingOnly = false; // 見積の未確定（黄・赤）絞込み表示（一時的・保存しない）
@@ -2250,14 +2286,16 @@ function renderWireInfo(){
     const len=byC[c]; total+=len;
     const val=cal ? (len*mmPerPx/1000).toFixed(1)+' m' : Math.round(len)+' px';
     const key=(estimate.wire.circuitSpec&&estimate.wire.circuitSpec[c])||defaultCableKeyForCircuit(c);
-    rows+=`<tr><td><span class="sw" style="background:${circuitColor(c)}"></span>${c?('回路'+c):'手動/未割当'}</td>`
+    const nm=circuitName(c);
+    rows+=`<tr><td><span class="sw" style="background:${circuitColor(c)}"></span>${c?('回路'+c):'手動/未割当'}${nm?'<br><span style="font-size:9.5px;color:var(--txt-dim)">'+escHtml(nm)+'</span>':''}</td>`
       +`<td><select class="cablesel" data-c="${c}">${opts(key)}</select></td>`
       +`<td><select class="ltsel" data-c="${c}">${optsLT(wireLineTypeKey(c))}</select></td><td class="n">${val}</td></tr>`;
   });
   const tv=cal ? (total*mmPerPx/1000).toFixed(1)+' m' : Math.round(total)+' px';
   host.innerHTML=`<div class="witit">配線 <b>${wires.length}</b>本 ／ 配線長合計 <b>${tv}</b>${cal?'':'（縮尺未設定）'}</div>`
     +`<label class="wilab"><input type="checkbox" id="wire-labels"${wireLabels?' checked':''}>ケーブルを図に表示（傍記）</label>`
-    +`<table class="tly wicable"><tr><th>回路</th><th>ケーブル</th><th>施工</th><th>長さ</th></tr>${rows}</table>`;
+    +`<table class="tly wicable"><tr><th>回路</th><th>ケーブル</th><th>施工</th><th>長さ</th></tr>${rows}</table>`
+    +`<button class="psbtn" id="open-ps">盤表を開く（回路一覧・負荷・警告）</button>`;
   host.querySelectorAll('.cablesel').forEach(s=>s.onchange=()=>{
     estimate.wire.circuitSpec=estimate.wire.circuitSpec||{}; estimate.wire.circuitSpec[+s.dataset.c]=s.value;
     renderWires(); if(document.getElementById('modal-estimate')&&document.getElementById('modal-estimate').classList.contains('show')) renderEstimate();
@@ -2268,6 +2306,7 @@ function renderWireInfo(){
     renderWires(); scheduleAutosave(); pushHistory();
   });
   const wl=host.querySelector('#wire-labels'); if(wl) wl.onchange=()=>{ wireLabels=wl.checked; renderWires(); scheduleAutosave(); };
+  const ps=host.querySelector('#open-ps'); if(ps) ps.onclick=openPanelSchedule;
 }
 
 el('btn-wire').onclick=toggleWireMode;
@@ -2387,6 +2426,90 @@ function defaultCableKeyForCircuit(c){
   const outletWire=ws.some(w=>{ const a=placed.find(p=>p.uid===w.a),b=placed.find(p=>p.uid===w.b); return (a&&catOf(a)==='コンセント')||(b&&catOf(b)==='コンセント'); });
   return outletWire?'vvf20_2c':'vvf16_2c';
 }
+// ── 盤表・負荷集計（v0.26） ──
+// 種別ごとの想定負荷[VA]（目安。コンセント=内線規程の一般値150VA/口、照明=器具別、動力/200Vは大きめ）
+const LOAD_VA={
+  light:60, base_lt:80, fujikasa:80, ceiling:60, pendant:60, chande:100, bracket:40, down:15, spot:50, rail:100,
+  exit:10, emg_inc:30, emg_fl:30,
+  outlet:150, outlet2p:150, outletE:150, outletET:150, outletLK:150, outletW:150, outletF:150,
+  outlet2P:1500, outlet3P:2000, motor:1500, fan:50 };
+const HEAVY_TYPES=['outlet2P','outlet3P','motor'];   // 専用回路が望ましい機器
+function loadVaOf(type){ return LOAD_VA[type]||0; }
+function circuitKeys(){   // 出現する回路番号（0=手動/未割当を含む）を昇順で
+  const set=new Set(); placed.forEach(p=>set.add(p.circuit==null?0:p.circuit)); wires.forEach(w=>set.add(w.circuit==null?0:w.circuit));
+  return [...set].sort((a,b)=>a-b);
+}
+function circuitDevices(c){ return placed.filter(p=>((p.circuit==null?0:p.circuit))===c); }
+function circuitName(c){ const m=(estimate.wire&&estimate.wire.circuitName)||{}; return m[c]||''; }
+function circuitLoadVA(c){ return circuitDevices(c).reduce((s,p)=>s+loadVaOf(p.type),0); }
+function circuitLenM(c){ let px=0; wires.forEach(w=>{ if((w.circuit==null?0:w.circuit)===c) px+=wireLenPx(w); }); return mmPerPx!=null?px*mmPerPx/1000:null; }
+function circuitWarns(c){
+  const devs=circuitDevices(c), va=circuitLoadVA(c), out=[];
+  if(va>2000) out.push('20A(2000VA)超過');
+  const heavy=devs.filter(p=>HEAVY_TYPES.includes(p.type));
+  if(heavy.length && devs.length>heavy.length) out.push('専用回路推奨');
+  return out;
+}
+function circuitMainDevices(c){   // 主な機器＝種別ごとの個数（多い順・上位）
+  const cnt={}; circuitDevices(c).forEach(p=>{ const nm=(symById(p.type)||{}).nm||p.type; cnt[nm]=(cnt[nm]||0)+1; });
+  return Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(([nm,n])=>nm+'×'+n).join('、');
+}
+function circuitCableLabel(c){   // 盤表・CSVに出す既定/指定ケーブルのラベル
+  const key=(estimate.wire&&estimate.wire.circuitSpec&&estimate.wire.circuitSpec[c])||defaultCableKeyForCircuit(c);
+  return (cableByKey(key)||{}).label||key;
+}
+function openPanelSchedule(){ renderPanelSchedule(); el('modal-panel').classList.add('show'); }
+function renderPanelSchedule(){
+  const body=el('ps-body'); const keys=circuitKeys();
+  if(!keys.length){ body.innerHTML='<div id="ps-empty">回路がありません。シンボルを配置し「自動配線」または回路割当で回路番号を付けると、この盤表に一覧されます。</div>'; return; }
+  let totVa=0, rows='';
+  keys.forEach(c=>{
+    const va=circuitLoadVA(c); totVa+=va;
+    const lenM=circuitLenM(c);
+    const warns=circuitWarns(c);
+    const nm=circuitName(c);
+    const cname=c?('回路'+c):'手動/未割当';
+    rows+=`<tr${warns.length?' class="over"':''}>`
+      +`<td><span class="cdotp" style="background:${circuitColor(c)}"></span>${cname}</td>`
+      +`<td><input type="text" class="psname psnamein" data-c="${c}" value="${escAttr(nm)}" placeholder="用途名（例：LDK照明）"></td>`
+      +`<td>${escHtml(circuitMainDevices(c)||'—')}</td>`
+      +`<td>${escHtml(circuitCableLabel(c))}</td>`
+      +`<td class="n">${lenM!=null?lenM.toFixed(1)+' m':'—'}</td>`
+      +`<td class="n">${va}</td>`
+      +`<td class="pswarn">${warns.length?escHtml(warns.join('／')):''}</td></tr>`;
+  });
+  body.innerHTML=`<table class="pstab"><thead><tr><th>回路</th><th>名称（用途）</th><th>主な機器</th><th>ケーブル</th><th>配線長</th><th>想定負荷[VA]</th><th>警告</th></tr></thead>`
+    +`<tbody>${rows}</tbody>`
+    +`<tfoot><tr><td colspan="5">合計 ${keys.length} 回路</td><td class="n">${totVa}</td><td></td></tr></tfoot></table>`;
+  body.querySelectorAll('.psnamein').forEach(inp=>inp.oninput=()=>{
+    estimate.wire.circuitName=estimate.wire.circuitName||{};
+    const c=+inp.dataset.c, v=inp.value.trim();
+    if(v) estimate.wire.circuitName[c]=v; else delete estimate.wire.circuitName[c];
+    scheduleAutosave(); renderWireInfo();
+  });
+}
+function exportPanelCSV(){
+  const keys=circuitKeys();
+  if(!keys.length){ toast('回路がありません'); return; }
+  const out=[];
+  out.push(['盤表（回路一覧）',estimate.head.name||'']);
+  out.push([]);
+  out.push(['回路','名称（用途）','主な機器','ケーブル','配線長(m)','想定負荷(VA)','警告']);
+  keys.forEach(c=>{
+    const lenM=circuitLenM(c);
+    out.push([ c?('回路'+c):'手動/未割当', circuitName(c), circuitMainDevices(c), circuitCableLabel(c),
+      lenM!=null?lenM.toFixed(1):'', circuitLoadVA(c), circuitWarns(c).join('／') ]);
+  });
+  out.push([]);
+  out.push(['合計',keys.length+'回路','','','',keys.reduce((s,c)=>s+circuitLoadVA(c),0),'']);
+  out.push([]);
+  out.push(['※想定負荷[VA]は種別ごとの目安値（コンセント150VA/口・照明は器具別・動力/200Vは大きめ）です。実負荷は器具仕様でご確認ください。']);
+  out.push(['※回路番号・名称は「自動配線」を再実行すると振り直されることがあります。']);
+  const csv='﻿'+out.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  dl(new Blob([csv],{type:'text/csv'}),'banhyo_'+ts()+'.csv'); toast('盤表CSVを書き出しました');
+}
+el('ps-close').onclick=()=>el('modal-panel').classList.remove('show');
+el('ps-csv').onclick=exportPanelCSV;
 function cableKeyFor(w){
   const cs=(estimate.wire&&estimate.wire.circuitSpec)||{};
   const c=(w.circuit==null?0:w.circuit);
@@ -3227,6 +3350,7 @@ function applyState(st){
   estimate=st.estimate||defaultEstimate();
   if(estimate.wire && !estimate.wire.circuitSpec) estimate.wire.circuitSpec={};   // 旧保存の後方互換
   if(estimate.wire && !estimate.wire.lineType) estimate.wire.lineType={};          // 線種マップの後方互換
+  if(estimate.wire && !estimate.wire.circuitName) estimate.wire.circuitName={};    // 回路名マップの後方互換
   typeColors=st.typeColors||{}; baseOpacity=(st.baseOpacity!=null?st.baseOpacity:1); copyStep=st.copyStep||1000;
   pdfDocCur=null;                          // 復元後はライブPDFなし（保存済みは描画済みページ画像）
   let vec=false;
@@ -3366,7 +3490,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.25', APP_DATE='2026-07-08';
+const APP_VERSION='0.26', APP_DATE='2026-07-09';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
