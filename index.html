@@ -173,6 +173,8 @@
   .projrow button{flex:none;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);border-radius:7px;padding:7px 12px;font-size:12px;font-weight:700;font-family:var(--jp);cursor:pointer}
   .projrow button.pjopen{background:var(--pending);border-color:var(--pending);color:#fff}
   .projrow button.pjdel{padding:7px 9px;color:#f0a9a0}
+  .projrow button.pjcopy{padding:7px 9px}
+  .projrow select.pjstatus{flex:none;background:var(--panel);border:1px solid var(--panel-line);border-radius:7px;color:var(--txt);padding:6px 4px;font-size:11px;font-family:var(--jp)}
   .projempty{font-size:12px;color:var(--txt-dim);text-align:center;padding:16px 4px}
   #modal-proj{position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:41;display:none;align-items:center;justify-content:center}
   #modal-proj.show{display:flex}
@@ -288,6 +290,12 @@
   #eopts{flex:none;display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:8px 16px;border-bottom:1px solid var(--panel-line);font-size:11px;color:var(--txt-dim)}
   #eopts label{display:flex;align-items:center;gap:5px}
   #eopts input[type=number]{width:60px;background:var(--panel);border:1px solid var(--panel-line);border-radius:6px;color:#fff;padding:4px 6px;font-size:12px;font-family:var(--mono);text-align:right}
+  #eopts button{border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);border-radius:7px;padding:5px 10px;font-size:11px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #eopts button:hover{background:var(--panel3)}
+  #eopts button:disabled{opacity:.4;cursor:default}
+  #ecounts{display:flex;align-items:center;gap:8px}
+  #ecounts .cdot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:3px;vertical-align:-1px}
+  #ebody input.modelin{width:110px;background:var(--panel);border:1px solid var(--panel-line);border-radius:6px;color:#fff;padding:4px 6px;font-size:11px}
   #ebody{flex:1;overflow:auto}
   table.est{width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap}
   table.est th{position:sticky;top:0;background:var(--panel2);color:var(--txt-dim);font-weight:700;font-size:11px;padding:7px 8px;text-align:left;border-bottom:1px solid var(--panel-line);z-index:1}
@@ -588,6 +596,7 @@
     <div id="ehead-inputs">
       <label>工事名<input id="eh-name" type="text" placeholder="○○邸 電気工事"></label>
       <label>宛先<input id="eh-to" type="text" placeholder="○○様"></label>
+      <label>住所<input id="eh-addr" type="text" placeholder="現場住所（任意）"></label>
       <label>見積番号<input id="eh-no" type="text" placeholder="No."></label>
       <label>見積日<input id="eh-date" type="text" placeholder="YYYY/MM/DD"></label>
     </div>
@@ -600,6 +609,9 @@
       <label><input id="eo-round" type="checkbox" checked>円未満切捨</label>
       <label><input id="eo-break" type="checkbox">材工内訳</label>
       <label><input id="eo-conduit" type="checkbox">電線管を含める</label>
+      <label><input id="eo-pending" type="checkbox">未確定のみ表示</label>
+      <button type="button" id="e-confirm-all" title="自動割当（黄）の行をすべて確定（緑）にします">自動割当を一括確定</button>
+      <span id="ecounts"></span>
     </div>
     <div id="ebody"></div>
     <div id="etot"></div>
@@ -773,12 +785,13 @@ let MASTER=null;          // 単価マスタ配列（ランタイムのみ・保
 let MASTER_IDX=null;      // {byCat:Map, byName:Map, cats:[]}
 let masterLoading=null;   // fetch多重防止
 function defaultEstimate(){
-  return { head:{name:'',to:'',no:'',date:''},
+  return { head:{name:'',to:'',addr:'',no:'',date:''},
     opts:{siteRate:0, adminRate:0, discount:0, taxRate:10, roundDown:true, showBreak:false},
     lines:{},   // [記号id]: {cat,name,spec,work,qty,off,user}（ユーザー上書きのみ保持）
     wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}, circuitSpec:{}, lineType:{}} };  // circuitSpec:回路→ケーブルkey, lineType:回路→線種key
 }
 let estimate = defaultEstimate();
+let estPendingOnly = false; // 見積の未確定（黄・赤）絞込み表示（一時的・保存しない）
 let wireLabels = false;    // 配線の線種傍記を図に表示
 // 追加機能（色/コピー/割当/下敷き濃さ）
 let typeColors = {};       // {記号id: 上書き色}（種別ごとの色変更）
@@ -2374,7 +2387,7 @@ function buildRows(){
     const sel=(ln.user&&ln.name)?{cat:ln.cat,name:ln.name,spec:ln.spec,work:ln.work}:defaultSel(type);
     const rec=sel?findRec(sel):null;
     const autoQty=counts[type]; const qty=(ln.qty!=null)?ln.qty:autoQty;
-    rows.push({id:'sym:'+type,kind:'device',label:s.nm,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:(SYMMAP[type].unit||''),autoQty,qty,off:!!ln.off,user:!!ln.user});
+    rows.push({id:'sym:'+type,kind:'device',label:s.nm,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:(SYMMAP[type].unit||''),autoQty,qty,off:!!ln.off,user:!!ln.user,model:ln.model||''});
   });
   // 配線：ケーブル（線種・条数）別に集計（回路ごとの指定を反映）
   const glen={};
@@ -2388,7 +2401,7 @@ function buildRows(){
     else if(estimate.wire.manualLen[g]!=null) qtyM=estimate.wire.manualLen[g]*(1+(estimate.wire.slack||0)/100);
     const autoQty=qtyM!=null?Math.round(qtyM*10)/10:null;
     const qty=(wl.qty!=null)?wl.qty:autoQty;
-    rows.push({id:'wire:'+g,kind:'wire',label:'配線 '+ct.label,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!wl.off,user:!!wl.user,uncal:(mmPerPx==null&&estimate.wire.manualLen[g]==null)});
+    rows.push({id:'wire:'+g,kind:'wire',label:'配線 '+ct.label,cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!wl.off,user:!!wl.user,model:wl.model||'',uncal:(mmPerPx==null&&estimate.wire.manualLen[g]==null)});
   });
   if(estimate.wire.conduitOn && mmPerPx!=null){
     const tot=Object.values(glen).reduce((a,b)=>a+b,0);   // 全ケーブルの合計長（glenはcable key別）
@@ -2398,7 +2411,7 @@ function buildRows(){
       const rec=sel?findRec(sel):null;
       const autoQty=Math.round((tot*mmPerPx/1000)*(1+(estimate.wire.slack||0)/100)*10)/10;
       const qty=(cw.qty!=null)?cw.qty:autoQty;
-      rows.push({id:'conduit:all',kind:'wire',label:'電線管',cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!cw.off,user:!!cw.user});
+      rows.push({id:'conduit:all',kind:'wire',label:'電線管',cat:sel?sel.cat:'',sel,rec,unit:rec?rec.unit:'ｍ',autoQty,qty,off:!!cw.off,user:!!cw.user,model:cw.model||''});
     }
   }
   return rows;
@@ -2431,7 +2444,8 @@ function syncEstimateInputs(){
   el('eo-disc').value=estimate.opts.discount||0; el('eo-tax').value=estimate.opts.taxRate;
   el('eo-slack').value=estimate.wire.slack; el('eo-round').checked=estimate.opts.roundDown;
   el('eo-break').checked=estimate.opts.showBreak; el('eo-conduit').checked=estimate.wire.conduitOn;
-  el('eh-name').value=estimate.head.name; el('eh-to').value=estimate.head.to; el('eh-no').value=estimate.head.no; el('eh-date').value=estimate.head.date;
+  el('eh-name').value=estimate.head.name||''; el('eh-to').value=estimate.head.to||''; el('eh-addr').value=estimate.head.addr||''; el('eh-no').value=estimate.head.no||''; el('eh-date').value=estimate.head.date||'';
+  el('eo-pending').checked=estPendingOnly;
 }
 function setMasterChip(state){
   const c=el('emaster'); c.className='echip'+(state==='ok'?' ok':state==='err'?' err':'');
@@ -2441,13 +2455,19 @@ function loadMasterUI(){ setMasterChip('loading'); loadMaster().then(()=>{ setMa
 
 function renderEstimate(){
   const body=el('ebody');
-  if(!MASTER_IDX){ body.innerHTML='<div id="enote" style="border:none">単価マスタを読み込んでください。</div>'; el('etot').innerHTML=''; return; }
+  if(!MASTER_IDX){ body.innerHTML='<div id="enote" style="border:none">単価マスタを読み込んでください。</div>'; el('etot').innerHTML=''; if(el('ecounts')) el('ecounts').innerHTML=''; return; }
   const rows=buildRows();
-  if(!rows.length){ body.innerHTML='<div id="enote" style="border:none">配置がありません。シンボルを配置してから見積を開いてください。</div>'; el('etot').innerHTML=''; return; }
+  if(!rows.length){ body.innerHTML='<div id="enote" style="border:none">配置がありません。シンボルを配置してから見積を開いてください。</div>'; el('etot').innerHTML=''; if(el('ecounts')) el('ecounts').innerHTML=''; return; }
+  // 信頼度カウント（黄=自動/緑=確定/赤=未マッチ、除外行は数えない）＋一括確定ボタンの活性
+  const nY=rows.filter(r=>!r.off&&r.rec&&!r.user).length, nG=rows.filter(r=>!r.off&&r.rec&&r.user).length, nR=rows.filter(r=>!r.off&&!r.rec).length;
+  if(el('ecounts')) el('ecounts').innerHTML=`<span><span class="cdot y"></span>自動 ${nY}</span><span><span class="cdot g"></span>確定 ${nG}</span><span><span class="cdot r"></span>未マッチ ${nR}</span>`;
+  const cab=el('e-confirm-all'); if(cab) cab.disabled=(nY===0);
+  // 未確定のみ表示（黄・赤。除外行は隠す）。合計は常に全行から計算
+  const shown=estPendingOnly?rows.filter(r=>!r.off&&(!r.rec||!r.user)):rows;
   const sb=estimate.opts.showBreak;
-  let h='<table class="est"><thead><tr><th></th><th>記号/対象</th><th>分類</th><th>品目</th><th>規格・仕様</th><th class="n">数量</th><th>単位</th>'
+  let h='<table class="est"><thead><tr><th></th><th>記号/対象</th><th>分類</th><th>品目</th><th>規格・仕様</th><th>型番メモ</th><th class="n">数量</th><th>単位</th>'
     +(sb?'<th class="n">材料費</th><th class="n">労務費</th><th class="n">経費</th>':'')+'<th class="n">複合単価</th><th class="n">金額</th><th>除外</th></tr></thead><tbody>';
-  rows.forEach(r=>{
+  shown.forEach(r=>{
     const price=r.rec?r.rec.composite_price:0;
     const amount=(!r.off&&r.rec&&r.qty!=null)?rnd(r.qty*price):0;
     const dot=r.off?'':(!r.rec?'r':(r.user?'g':'y'));
@@ -2455,6 +2475,7 @@ function renderEstimate(){
       +`<td>${dot?`<span class="cdot ${dot}"></span>`:''}</td>`
       +`<td>${escHtml(r.label)}</td>`
       +`<td>${catSelectHtml(r)}</td><td>${nameSelectHtml(r)}</td><td>${specSelectHtml(r)}</td>`
+      +`<td><input class="modelin" data-id="${escAttr(r.id)}" type="text" value="${escAttr(r.model||'')}" placeholder="任意"></td>`
       +`<td class="n"><input class="qty" data-id="${escAttr(r.id)}" type="number" min="0" step="${r.kind==='wire'?'0.1':'1'}" value="${r.qty!=null?r.qty:''}"${r.uncal?' disabled placeholder="—"':(r.autoQty!=null?' placeholder="'+r.autoQty+'"':'')}></td>`
       +`<td>${escHtml(r.unit||'')}</td>`
       +(sb?`<td class="n" data-mat>${r.rec&&r.qty!=null?yen(r.qty*r.rec.material_cost):''}</td><td class="n" data-lab>${r.rec&&r.qty!=null?yen(r.qty*r.rec.labor_cost):''}</td><td class="n" data-exp>${r.rec&&r.qty!=null?yen(r.qty*r.rec.expense):''}</td>`:'')
@@ -2463,10 +2484,12 @@ function renderEstimate(){
       +`<td style="text-align:center"><input type="checkbox" class="eoff" data-id="${escAttr(r.id)}"${r.off?' checked':''}></td></tr>`;
   });
   h+='</tbody></table>';
+  if(estPendingOnly&&!shown.length) h='<div id="enote" style="border:none">未確定（黄・赤）はありません。すべて確定済みです。</div>';
   body.innerHTML=h;
   body.querySelectorAll('select[data-dim]').forEach(s=>s.addEventListener('change',onSelChange));
   body.querySelectorAll('input.qty').forEach(i=>i.addEventListener('input',onQtyInput));
   body.querySelectorAll('input.eoff').forEach(c=>c.addEventListener('change',onOffChange));
+  body.querySelectorAll('input.modelin').forEach(i=>i.addEventListener('input',e=>{ storeFor(e.target.dataset.id).model=e.target.value; scheduleAutosave(); }));  // 型番メモ（再描画しない＝フォーカス維持）
   renderTotals(rows);
 }
 function renderTotals(rows){
@@ -2515,7 +2538,15 @@ el('eo-slack').oninput=()=>{ estimate.wire.slack=+el('eo-slack').value||0; rende
 el('eo-round').onchange=()=>{ estimate.opts.roundDown=el('eo-round').checked; renderEstimate(); };
 el('eo-break').onchange=()=>{ estimate.opts.showBreak=el('eo-break').checked; renderEstimate(); };
 el('eo-conduit').onchange=()=>{ estimate.wire.conduitOn=el('eo-conduit').checked; renderEstimate(); };
-['name','to','no','date'].forEach(k=>{ el('eh-'+k).oninput=()=>{ estimate.head[k]=el('eh-'+k).value; }; });
+el('eo-pending').onchange=()=>{ estPendingOnly=el('eo-pending').checked; renderEstimate(); };
+el('e-confirm-all').onclick=()=>{   // 自動割当（黄）を一括確定＝userフラグ付与（赤=未マッチは対象外）
+  const rows=buildRows(); let n=0;
+  rows.forEach(r=>{ if(r.off||!r.rec||r.user||!r.sel) return;
+    setSelById(r.id,{cat:r.sel.cat,name:r.sel.name,spec:r.sel.spec,work:r.sel.work,idx:idxOfRec(r.sel.cat,r.sel.name,r.rec)}); n++; });
+  if(n){ renderEstimate(); scheduleAutosave(); toast(n+'件の自動割当を確定しました'); }
+  else toast('確定できる自動割当（黄）はありません');
+};
+['name','to','addr','no','date'].forEach(k=>{ el('eh-'+k).oninput=()=>{ estimate.head[k]=el('eh-'+k).value; }; });
 
 function exportEstimateCSV(){
   if(!MASTER_IDX){ toast('先に単価マスタを読み込んでください'); return; }
@@ -2526,7 +2557,7 @@ function exportEstimateCSV(){
   let i=0;
   rows.forEach(r=>{ if(r.off) return; i++; const price=r.rec?r.rec.composite_price:0; const amt=(r.rec&&r.qty!=null)?rnd(r.qty*price):0;
     out.push([i,r.label,r.cat,r.sel?r.sel.name:'',r.sel?r.sel.spec:'',r.sel?(r.sel.work||''):'',r.qty!=null?r.qty:'',r.unit,
-      r.rec&&r.qty!=null?rnd(r.qty*r.rec.material_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.labor_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.expense):'',price,amt,r.rec?'':'未マッチ']); });
+      r.rec&&r.qty!=null?rnd(r.qty*r.rec.material_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.labor_cost):'',r.rec&&r.qty!=null?rnd(r.qty*r.rec.expense):'',price,amt,[r.model,r.rec?'':'未マッチ'].filter(Boolean).join(' / ')]); });
   out.push([]);
   const tl=(k,v)=>{ const row=new Array(11).fill(''); row.push(k,v); out.push(row); };
   tl('材料費計',t.mat); tl('労務費計',t.lab); tl('経費計',t.exp); tl('直接工事費',t.direct);
@@ -2622,7 +2653,7 @@ function buildEstimateXlsx(){
       (r.rec&&r.qty!=null?N(rnd(r.qty*r.rec.material_cost)):T('')),
       (r.rec&&r.qty!=null?N(rnd(r.qty*r.rec.labor_cost)):T('')),
       (r.rec&&r.qty!=null?N(rnd(r.qty*r.rec.expense)):T('')),
-      N(price), (amt!=null?N(amt):T('')), T(r.rec?'':'未マッチ') ]); });
+      N(price), (amt!=null?N(amt):T('')), T([r.model,r.rec?'':'未マッチ'].filter(Boolean).join(' / ')) ]); });
   aoa.push([]);
   const tl=(k,v)=>{ const row=new Array(12).fill(null); row[11]={v:k,t:'s',s:S.tl}; row[12]={v:v,t:'n',s:S.tv}; aoa.push(row); };
   tl('材料費計',t.mat); tl('労務費計',t.lab); tl('経費計',t.exp); tl('直接工事費',t.direct);
@@ -3135,29 +3166,43 @@ function idbGet(id){ return idb().then(db=>new Promise((res,rej)=>{ const rq=db.
 function idbDel(id){ return idb().then(db=>new Promise((res,rej)=>{ const tx=db.transaction('projects','readwrite'); tx.objectStore('projects').delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); })); }
 function fmtTs(t){ const d=new Date(t); const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}/${z(d.getMonth()+1)}/${z(d.getDate())} ${z(d.getHours())}:${z(d.getMinutes())}`; }
 
+const PROJ_STATUS=['作図中','見積中','提出済','受注','完工'];   // 案件ステータス（保存レコード直下の status に保持）
 function saveProject(){
   if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開いてください'); return; }
   const isNew=!currentProjId;
   let name=currentProjName;
   if(isNew){ name=prompt('保存名を入力してください', (estimate.head&&estimate.head.name)||('図面 '+fmtTs(Date.now()))); if(name==null)return; name=(name.trim())||('図面 '+fmtTs(Date.now())); }
   const id=currentProjId||('p'+Date.now());
-  idbPut({id, name, ts:Date.now(), data:buildState()})
-    .then(()=>{ currentProjId=id; currentProjName=name; refreshProjLists(); toast((isNew?'ブラウザ内に保存しました：':'更新しました：')+name); })
+  const put=prev=>idbPut({id, name, ts:Date.now(), status:(prev&&prev.status)||'作図中', data:buildState()})   // 更新時も既存ステータスを保持
+    .then(()=>{ currentProjId=id; currentProjName=name; refreshProjLists(); toast((isNew?'ブラウザ内に保存しました：':'更新しました：')+name); });
+  (isNew?put(null):idbGet(id).then(put))
     .catch(e=>{ console.error(e); toast('保存に失敗しました（容量超過の可能性）。ファイル書き出しをお試しください'); });
 }
 function openProject(id){ idbGet(id).then(rec=>{ if(!rec){ toast('見つかりませんでした'); return; } applyState(rec.data); currentProjId=rec.id; currentProjName=rec.name; closeProjModal(); toast('開きました：'+rec.name); }).catch(e=>{ console.error(e); toast('開けませんでした（ブラウザ内保存が使えません）'); }); }
 function deleteProject(id){ if(!confirm('この保存を削除しますか？'))return; idbDel(id).then(()=>{ if(currentProjId===id) currentProjId=null; refreshProjLists(); toast('削除しました'); }).catch(e=>{ console.error(e); toast('削除できませんでした'); }); }
+function duplicateProject(id){   // 前回案件を複製して新規案件のベースに（データはそのままコピー）
+  idbGet(id).then(rec=>{ if(!rec){ toast('見つかりませんでした'); return; }
+    const cp={id:'p'+Date.now(), name:rec.name+'（複製）', ts:Date.now(), status:'作図中', data:rec.data};
+    return idbPut(cp).then(()=>{ refreshProjLists(); toast('複製しました：'+cp.name); });
+  }).catch(e=>{ console.error(e); toast('複製できませんでした'); });
+}
+function setProjStatus(id,st){ idbGet(id).then(rec=>{ if(!rec) return; rec.status=st; return idbPut(rec); }).then(()=>refreshProjLists()).catch(()=>toast('ステータスを更新できませんでした')); }
 function projRowsHtml(list){
   if(!list.length) return '<div class="projempty">保存された図面はまだありません</div>';
-  return list.slice().sort((a,b)=>b.ts-a.ts).map(p=>
-    `<div class="projrow"><div class="pj"><div class="pjn">${escHtml(p.name)}</div><div class="pjd">${fmtTs(p.ts)}</div></div>`+
-    `<button class="pjopen" data-id="${escAttr(p.id)}">開く</button><button class="pjdel" data-id="${escAttr(p.id)}">🗑</button></div>`).join('');
+  const stOpts=cur=>PROJ_STATUS.map(s=>`<option value="${s}"${s===cur?' selected':''}>${s}</option>`).join('');
+  return list.slice().sort((a,b)=>b.ts-a.ts).map(p=>{
+    const cust=(p.data&&p.data.estimate&&p.data.estimate.head&&p.data.estimate.head.to)||'';   // 宛先=顧客名を一覧に表示
+    return `<div class="projrow"><div class="pj"><div class="pjn">${escHtml(p.name)}</div><div class="pjd">${fmtTs(p.ts)}${cust?'　'+escHtml(cust):''}</div></div>`+
+    `<select class="pjstatus" data-id="${escAttr(p.id)}" title="案件ステータス">${stOpts(p.status||'作図中')}</select>`+
+    `<button class="pjopen" data-id="${escAttr(p.id)}">開く</button><button class="pjcopy" data-id="${escAttr(p.id)}" title="複製して新規案件のベースに">⧉</button><button class="pjdel" data-id="${escAttr(p.id)}">🗑</button></div>`; }).join('');
 }
 function refreshProjLists(){ return idbAll().then(all=>{
   const list=all.filter(r=>r.id!==AUTO_ID&&r.id!==AUTO_BASE_ID);   // 自動保存スロットは一覧に出さない
   ['proj-list','uploader-projlist'].forEach(id=>{ const h=el(id); if(h) h.innerHTML=projRowsHtml(list); });
   document.querySelectorAll('.pjopen').forEach(x=>x.onclick=()=>openProject(x.dataset.id));
   document.querySelectorAll('.pjdel').forEach(x=>x.onclick=()=>deleteProject(x.dataset.id));
+  document.querySelectorAll('.pjcopy').forEach(x=>x.onclick=()=>duplicateProject(x.dataset.id));
+  document.querySelectorAll('.pjstatus').forEach(x=>x.onchange=()=>setProjStatus(x.dataset.id,x.value));
 }).catch(()=>{ ['proj-list','uploader-projlist'].forEach(id=>{ const h=el(id); if(h) h.innerHTML='<div class="projempty">ブラウザ内保存が使えません</div>'; }); }); }
 function openProjModal(){ refreshProjLists(); el('modal-proj').classList.add('show'); }
 function closeProjModal(){ el('modal-proj').classList.remove('show'); }
@@ -3225,7 +3270,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.23', APP_DATE='2026-07-08';
+const APP_VERSION='0.24', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
