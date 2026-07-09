@@ -2276,7 +2276,14 @@ function renderWires(){
 }
 function renderWireInfo(){
   const host=document.getElementById('wireinfo');
-  if(!wires.length){ host.innerHTML=''; return; }
+  const anyCircuit=placed.some(p=>p.circuit);   // 実回路（≥1）が割当済みか
+  if(!wires.length && !anyCircuit){ host.innerHTML=''; return; }
+  if(!wires.length){   // 回路割当はあるが配線が無い → 盤表だけ開けるようにする
+    host.innerHTML=`<div class="witit">配線なし（回路割当のみ）</div>`
+      +`<button class="psbtn" id="open-ps">盤表を開く（回路一覧・負荷・警告）</button>`;
+    const psb=host.querySelector('#open-ps'); if(psb) psb.onclick=openPanelSchedule;
+    return;
+  }
   const cal=mmPerPx!=null;
   const byC={}; wires.forEach(w=>{ const c=(w.circuit==null?0:w.circuit); byC[c]=(byC[c]||0)+wireLenPx(w); });
   const opts=k=>CABLE_TYPES.map(ct=>`<option value="${ct.key}"${ct.key===k?' selected':''}>${ct.label}</option>`).join('');
@@ -2444,6 +2451,7 @@ function circuitName(c){ const m=(estimate.wire&&estimate.wire.circuitName)||{};
 function circuitLoadVA(c){ return circuitDevices(c).reduce((s,p)=>s+loadVaOf(p.type),0); }
 function circuitLenM(c){ let px=0; wires.forEach(w=>{ if((w.circuit==null?0:w.circuit)===c) px+=wireLenPx(w); }); return mmPerPx!=null?px*mmPerPx/1000:null; }
 function circuitWarns(c){
+  if(!c) return [];   // 0=手動/未割当は実回路ではない（未割当の寄せ集め）ので過負荷判定しない
   const devs=circuitDevices(c), va=circuitLoadVA(c), out=[];
   if(va>2000) out.push('20A(2000VA)超過');
   const heavy=devs.filter(p=>HEAVY_TYPES.includes(p.type));
