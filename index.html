@@ -204,6 +204,11 @@
   #modal-layout select,#modal-layout input{width:100%;padding:8px 9px;border-radius:8px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;font-size:14px;font-family:var(--jp)}
   #modal-layout input[type=number]{font-family:var(--mono)}
   #modal-layout input:disabled{color:var(--txt-dim);background:#171a20}
+  .tmplrow{display:flex;gap:8px}
+  .tmplrow select{flex:1}
+  .tmplrow button{flex:none;width:auto;padding:8px 14px;white-space:nowrap}
+  #tmpl-info{margin:6px 0 0}
+  .tmpl-sep{text-align:center;font-size:10.5px;color:var(--txt-dim);margin:4px 0 12px;letter-spacing:.04em}
   .nxny{display:flex;gap:10px}
   .nxny .fld{flex:1;margin-bottom:11px}
   .stepper{display:flex;align-items:center;gap:7px}
@@ -465,7 +470,13 @@
       <!-- 自動配灯 設定パネル（Step B） -->
       <div id="modal-layout">
         <h4>自動配灯（均等配置）</h4>
-        <p class="hint2">部屋の範囲を指定しました。台数を決めて「配置」を押すと、各セル中央に均等配置します（壁際＝ピッチ1/2）。</p>
+        <p class="hint2">部屋の範囲を指定しました。部屋テンプレを選ぶと照明＋スイッチ＋コンセント（＋換気扇）を一括配置。照明のみなら下で台数を決めて「配置」。</p>
+        <div class="fld" id="tmpl-fld">
+          <label>部屋テンプレ（一括配置）</label>
+          <div class="tmplrow"><select id="layout-tmpl"></select><button type="button" id="layout-tmpl-ok" class="acc">テンプレ配置</button></div>
+          <div id="tmpl-info" class="hint2"></div>
+        </div>
+        <div class="tmpl-sep">— または 照明のみ均等配置 —</div>
         <div class="fld">
           <label>照明器具</label>
           <select id="layout-type"></select>
@@ -1913,6 +1924,9 @@ function openLayoutModal(rect){
   const sel=el('layout-type');
   sel.innerHTML=LIGHT_TYPES.map(s=>`<option value="${s.id}">${s.nm}</option>`).join('');
   sel.value=defType;
+  const tsel=el('layout-tmpl');
+  if(tsel && !tsel.options.length) tsel.innerHTML=ROOM_TEMPLATES.map(t=>`<option value="${t.key}">${t.nm}</option>`).join('');
+  updateTmplInfo();
   el('layout-nx').value=1; el('layout-ny').value=1;
   const use=el('lumen-use');
   use.innerHTML=USE_E.map(([nm,e])=>`<option value="${e}">${nm}（${e}lx）</option>`).join('');
@@ -1978,6 +1992,25 @@ el('lumen-calc').onclick=()=>{
 
 el('layout-cancel').onclick=endLayout;
 el('layout-ok').onclick=commitLayout;
+function updateTmplInfo(){
+  const info=el('tmpl-info'), tsel=el('layout-tmpl'); if(!info||!tsel||!layoutDraft) return;
+  const t=ROOM_TEMPLATES.find(x=>x.key===tsel.value); if(!t) return;
+  const N=templateLightCount(t,layoutDraft.rect), g=factorizeGrid(N,layoutDraft.rect.w,layoutDraft.rect.h);
+  const parts=[`照明 ${symById(t.light)?symById(t.light).nm:t.light} ${g.nx*g.ny}台`];
+  if(t.sw) parts.push('SW 1');
+  if(t.outlets) parts.push(`コンセント ${t.outlets}`);
+  if(t.fan) parts.push('換気扇 1');
+  info.textContent='配置内容：'+parts.join(' ／ ')+(mmPerPx!=null?'':'（照明台数は目安。較正すると光束法で算出）');
+}
+if(el('layout-tmpl')) el('layout-tmpl').addEventListener('change',updateTmplInfo);
+if(el('layout-tmpl-ok')) el('layout-tmpl-ok').onclick=()=>{
+  if(!layoutDraft) return;
+  const t=ROOM_TEMPLATES.find(x=>x.key===el('layout-tmpl').value); if(!t) return;
+  const res=placeRoomTemplate(layoutDraft.rect, t); if(!res) return;
+  renderSyms(); renderTally();
+  endLayout(); pushHistory();
+  toast(`${t.nm}を一括配置しました（計${res.total}点）`);
+};
 function commitLayout(){
   if(!layoutDraft) return;
   const nx=clampCount(el('layout-nx').value), ny=clampCount(el('layout-ny').value);
@@ -2002,6 +2035,64 @@ function placeRoomLights(room){
     ids.push(pushSymbol(room.type,x,y,{roomId:room.rid,gi:i,gj:j}));
   }
   room.childUids=ids;
+}
+
+// ── 部屋テンプレ（v0.25）：部屋種別で 照明＋SW＋コンセント（＋換気扇）を一括配置 ──
+// E=設計照度[lx](JIS目安), outlets=コンセント数, outlet=コンセント種別, fan=換気扇, sw=スイッチ
+const ROOM_TEMPLATES=[
+  {key:'ldk',   nm:'LDK',      light:'base_lt', E:200, outlets:4, outlet:'outlet',  sw:true, fan:false},
+  {key:'bed',   nm:'寝室',      light:'ceiling', E:200, outlets:3, outlet:'outlet',  sw:true, fan:false},
+  {key:'kit',   nm:'キッチン',   light:'base_lt', E:300, outlets:3, outlet:'outletE', sw:true, fan:true},
+  {key:'wc',    nm:'トイレ',     light:'down',    E:150, outlets:1, outlet:'outlet',  sw:true, fan:true},
+  {key:'wash',  nm:'洗面脱衣',   light:'down',    E:200, outlets:2, outlet:'outletE', sw:true, fan:true},
+  {key:'ent',   nm:'玄関',       light:'down',    E:150, outlets:1, outlet:'outlet',  sw:true, fan:false},
+  {key:'hall',  nm:'廊下',       light:'down',    E:150, outlets:1, outlet:'outlet',  sw:true, fan:false},
+  {key:'office',nm:'事務所',     light:'base_lt', E:750, outlets:6, outlet:'outlet',  sw:true, fan:false},
+  {key:'store', nm:'倉庫',       light:'base_lt', E:100, outlets:2, outlet:'outlet',  sw:true, fan:false},
+];
+const FIXTURE_LM={base_lt:4000, fujikasa:4000, ceiling:3000, pendant:2500, chande:5000, down:800, bracket:1000, light:1500, spot:800, rail:3000};
+function templateLightCount(tmpl,rect){
+  const A=(mmPerPx!=null)?(rect.w*mmPerPx/1000)*(rect.h*mmPerPx/1000):null;   // m²（較正時）
+  const F=FIXTURE_LM[tmpl.light]||2000;
+  let N;
+  if(A){ N=Math.ceil(tmpl.E*A/(F*0.6*0.7)); }                                  // 光束法（U=0.6,M=0.7既定）
+  else { N=Math.round((rect.w*rect.h)/(240*240)); }                            // 未較正＝px面積の目安
+  return Math.max(1, Math.min(N, 40));
+}
+// 矩形周（上→右→下→左）に沿ってn点を等配置し、内側へinsetだけ寄せる
+function perimeterPoints(x0,y0,w,h,n,inset){
+  const per=2*(w+h), pts=[];
+  for(let k=0;k<n;k++){ let d=per*(k+0.5)/n, x,y,dx=0,dy=0;
+    if(d<w){ x=x0+d; y=y0; dy=inset; }
+    else if(d<w+h){ x=x0+w; y=y0+(d-w); dx=-inset; }
+    else if(d<2*w+h){ x=x0+w-(d-w-h); y=y0+h; dy=-inset; }
+    else { x=x0; y=y0+h-(d-2*w-h); dx=inset; }
+    pts.push([x+dx, y+dy]);
+  }
+  return pts;
+}
+function placeRoomTemplate(rect,tmpl){
+  const rid=roomSeq++;
+  const inset=Math.max(12, Math.min(40, Math.min(rect.w,rect.h)*0.08));
+  const N=templateLightCount(tmpl,rect);
+  const g=factorizeGrid(N, rect.w, rect.h);
+  const total=g.nx*g.ny + (tmpl.sw?1:0) + tmpl.outlets + (tmpl.fan?1:0);
+  if(total>MAX_TOTAL){ toast('範囲が大きすぎます。範囲を見直してください'); return null; }
+  const ids=[];
+  // 照明（グリッド中央）
+  for(let j=0;j<g.ny;j++) for(let i=0;i<g.nx;i++){
+    ids.push(pushSymbol(tmpl.light, rect.x0+(rect.w/g.nx)*(i+0.5), rect.y0+(rect.h/g.ny)*(j+0.5), {roomId:rid,gi:i,gj:j}));
+  }
+  // スイッチ（入口側＝下辺の左寄り）
+  if(tmpl.sw) ids.push(pushSymbol('sw', rect.x0+Math.min(rect.w*0.15,60), rect.y0+rect.h-inset, {roomId:rid}));
+  // コンセント（壁沿いに等配置）
+  perimeterPoints(rect.x0,rect.y0,rect.w,rect.h, tmpl.outlets, inset).forEach(p=> ids.push(pushSymbol(tmpl.outlet, p[0], p[1], {roomId:rid})));
+  // 換気扇（水回り＝上辺中央）
+  if(tmpl.fan) ids.push(pushSymbol('fan', rect.x0+rect.w/2, rect.y0+inset, {roomId:rid}));
+  const room={rid, x0:Math.round(rect.x0), y0:Math.round(rect.y0), w:Math.round(rect.w), h:Math.round(rect.h),
+    nx:g.nx, ny:g.ny, type:tmpl.light, kind:tmpl.key, childUids:ids, lumen:null};
+  rooms.push(room);
+  return {room, total, nlight:g.nx*g.ny};
 }
 
 // 設定パネルの入力配線（要素は常設のため初期化時に一度だけ）
@@ -3275,7 +3366,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.24', APP_DATE='2026-07-08';
+const APP_VERSION='0.25', APP_DATE='2026-07-08';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
