@@ -2455,9 +2455,10 @@ function loadMasterUI(){ setMasterChip('loading'); loadMaster().then(()=>{ setMa
 
 function renderEstimate(){
   const body=el('ebody');
-  if(!MASTER_IDX){ body.innerHTML='<div id="enote" style="border:none">単価マスタを読み込んでください。</div>'; el('etot').innerHTML=''; if(el('ecounts')) el('ecounts').innerHTML=''; return; }
+  const cabEl=el('e-confirm-all');
+  if(!MASTER_IDX){ body.innerHTML='<div id="enote" style="border:none">単価マスタを読み込んでください。</div>'; el('etot').innerHTML=''; if(el('ecounts')) el('ecounts').innerHTML=''; if(cabEl) cabEl.disabled=true; return; }
   const rows=buildRows();
-  if(!rows.length){ body.innerHTML='<div id="enote" style="border:none">配置がありません。シンボルを配置してから見積を開いてください。</div>'; el('etot').innerHTML=''; if(el('ecounts')) el('ecounts').innerHTML=''; return; }
+  if(!rows.length){ body.innerHTML='<div id="enote" style="border:none">配置がありません。シンボルを配置してから見積を開いてください。</div>'; el('etot').innerHTML=''; if(el('ecounts')) el('ecounts').innerHTML=''; if(cabEl) cabEl.disabled=true; return; }
   // 信頼度カウント（黄=自動/緑=確定/赤=未マッチ、除外行は数えない）＋一括確定ボタンの活性
   const nY=rows.filter(r=>!r.off&&r.rec&&!r.user).length, nG=rows.filter(r=>!r.off&&r.rec&&r.user).length, nR=rows.filter(r=>!r.off&&!r.rec).length;
   if(el('ecounts')) el('ecounts').innerHTML=`<span><span class="cdot y"></span>自動 ${nY}</span><span><span class="cdot g"></span>確定 ${nG}</span><span><span class="cdot r"></span>未マッチ ${nR}</span>`;
@@ -2484,7 +2485,7 @@ function renderEstimate(){
       +`<td style="text-align:center"><input type="checkbox" class="eoff" data-id="${escAttr(r.id)}"${r.off?' checked':''}></td></tr>`;
   });
   h+='</tbody></table>';
-  if(estPendingOnly&&!shown.length) h='<div id="enote" style="border:none">未確定（黄・赤）はありません。すべて確定済みです。</div>';
+  if(estPendingOnly&&!shown.length) h='<div id="enote" style="border:none">'+(nR||nY?'表示できる未確定項目がありません（除外中の可能性）。':'未確定（黄・赤）はありません。すべて確定済みです。')+'</div>';
   body.innerHTML=h;
   body.querySelectorAll('select[data-dim]').forEach(s=>s.addEventListener('change',onSelChange));
   body.querySelectorAll('input.qty').forEach(i=>i.addEventListener('input',onQtyInput));
@@ -2552,6 +2553,7 @@ function exportEstimateCSV(){
   if(!MASTER_IDX){ toast('先に単価マスタを読み込んでください'); return; }
   const rows=buildRows(), t=computeTotals(rows), out=[];
   out.push(['工事名',estimate.head.name]); out.push(['宛先',estimate.head.to]);
+  if(estimate.head.addr) out.push(['住所',estimate.head.addr]);
   out.push(['見積番号',estimate.head.no,'見積日',estimate.head.date]); out.push([]);
   out.push(['No','記号/対象','分類','品目','規格・仕様','施工条件','数量','単位','材料費','労務費','経費','複合単価','金額','備考']);
   let i=0;
@@ -2642,6 +2644,7 @@ function buildEstimateXlsx(){
   aoa.push([{v:'見 積 書',t:'s',s:S.ttl}]);
   const kv=(k,v)=>aoa.push([{v:k,t:'s',s:0},{v:v||'',t:'s',s:0}]);
   kv('工事名', estimate.head.name); kv('宛先', estimate.head.to);
+  if(estimate.head.addr) kv('住所', estimate.head.addr);
   aoa.push([{v:'見積番号',t:'s',s:0},{v:estimate.head.no||'',t:'s',s:0},{v:'見積日',t:'s',s:0},{v:estimate.head.date||'',t:'s',s:0}]);
   aoa.push([]);
   const HD=['No','記号/対象','分類','品目','規格・仕様','施工条件','数量','単位','材料費','労務費','経費','複合単価','金額','備考'];
@@ -2980,7 +2983,9 @@ function buildTitleBlockSVG(rc){
   const h=estimate.head||{};
   const scSel=(el('print-scale')&&el('print-scale').value)||'fit';   // 固定縮尺印刷なら 1:S を表示
   const scaleLabel=(mmPerPx==null)?'—':(scSel!=='fit'?`1:${scSel}`:'実寸(mm)');
-  const rows=[['工事名', h.name||''],['宛先', h.to||''],['見積番号', h.no||''],['作成日', h.date||fmtTs(Date.now()).slice(0,10)],['縮尺', scaleLabel]];
+  const rows=[['工事名', h.name||''],['宛先', h.to||'']];
+  if(h.addr) rows.push(['住所', h.addr]);
+  rows.push(['見積番号', h.no||''],['作成日', h.date||fmtTs(Date.now()).slice(0,10)],['縮尺', scaleLabel]);
   const tbW=Math.min(rc.vw*0.42, 78*S), tbH=(rows.length)*fs*1.8, tbX=x1-S*0.8-tbW, tbY=y1-S*0.8-tbH;
   g+=`<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="#fff" stroke="#111" stroke-width="${sw*1.5}"/>`;
   rows.forEach((r,i)=>{ const ry=tbY+i*fs*1.8;
