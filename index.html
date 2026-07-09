@@ -2073,7 +2073,7 @@ function perimeterPoints(x0,y0,w,h,n,inset){
 }
 function placeRoomTemplate(rect,tmpl){
   const rid=roomSeq++;
-  const inset=Math.max(12, Math.min(40, Math.min(rect.w,rect.h)*0.08));
+  const inset=Math.min(Math.max(12, Math.min(40, Math.min(rect.w,rect.h)*0.08)), Math.min(rect.w,rect.h)*0.4);   // 極小部屋でも範囲外へはみ出さない
   const N=templateLightCount(tmpl,rect);
   const g=factorizeGrid(N, rect.w, rect.h);
   const total=g.nx*g.ny + (tmpl.sw?1:0) + tmpl.outlets + (tmpl.fan?1:0);
