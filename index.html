@@ -1222,7 +1222,8 @@ function afterLayerChange(){
   if(selUid!=null){ const p=placed.find(x=>x.uid===selUid); if(!p||!layerSelectable(p.layer)) selUid=null; }
   if(selSet.length) selSet=selSet.filter(u=>{ const p=placed.find(x=>x.uid===u); return p&&layerSelectable(p.layer); });
   if(selTextUid!=null && !layerSelectable('text')) selTextUid=null;
-  applyBaseLayer(); renderSyms(); renderTexts(); renderSel(); renderMselbar(); renderLayers(); scheduleAutosave();  // renderSymsがrenderWiresも呼ぶ
+  if(selFreeUid!=null && !layerSelectable('draw')) selFreeUid=null;   // 作図線レイヤー非表示/ロックで選択解除（バー残り防止）
+  applyBaseLayer(); renderSyms(); renderTexts(); renderFree(); renderFreebar(); renderSel(); renderMselbar(); renderLayers(); scheduleAutosave();  // renderSymsがrenderWiresも呼ぶ／作図線も表示更新
 }
 function layerAction(id,act){
   const L=findLayer(id); if(!L) return;
