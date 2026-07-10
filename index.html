@@ -514,6 +514,15 @@
         <button id="sel-cpR" class="dir" title="右へコピー">→</button>
         <button id="sel-cpU" class="dir" title="上へコピー">↑</button>
         <button id="sel-cpD" class="dir" title="下へコピー">↓</button>
+        <div class="sep"></div>
+        <div class="grp" title="この間隔で移動（微調整）"><span class="lbl2">移動</span></div>
+        <button id="sel-mvL" class="dir" title="左へ移動">◀</button>
+        <button id="sel-mvR" class="dir" title="右へ移動">▶</button>
+        <button id="sel-mvU" class="dir" title="上へ移動">▲</button>
+        <button id="sel-mvD" class="dir" title="下へ移動">▼</button>
+        <div class="sep"></div>
+        <button id="sel-gang" title="同じ記号をすぐ隣にぴったり付けて複製（2連・3連…）" style="width:auto;padding:0 10px">＋連</button>
+        <button id="sel-wall" title="最寄りの壁線（部屋枠・作図線・DXF/JWW下敷き）にぴったり付ける" style="width:auto;padding:0 10px">壁へ</button>
         <button id="sel-dup" title="複製（同じ記号をもう1つ置く）" style="width:auto;padding:0 10px">複製</button>
         <button id="sel-assign" title="点灯照明を選択" style="display:none;width:auto;padding:0 10px">点灯照明</button>
         <div class="sep"></div>
@@ -533,6 +542,8 @@
         <button id="msel-alV" class="wd" title="X座標を揃えて縦一列に">縦揃え</button>
         <button id="msel-dsH" class="wd" title="横方向に等間隔に配置">横等間隔</button>
         <button id="msel-dsV" class="wd" title="縦方向に等間隔に配置">縦等間隔</button>
+        <button id="msel-even" class="wd" title="行×列に自動で分け、包含する部屋があれば部屋に対して均等配置（壁際=1/2ピッチ）、なければ選択範囲で均等">部屋均等</button>
+        <button id="msel-wall" class="wd" title="選択中のコンセント/スイッチ/壁付照明を最寄りの壁線にぴったり付ける">壁へ</button>
         <div class="sep"></div>
         <div class="grp" title="選択中をこのレイヤーへ移動"><span class="lbl2">層へ</span><select id="msel-layer" class="laysel"></select></div>
         <div class="sep"></div>
@@ -1552,6 +1563,8 @@ function renderSel(){
   el('sel-step').value=copyStep;
   el('sel-stepunit').textContent=(mmPerPx!=null)?'間隔mm':'間隔px';
   el('sel-assign').style.display=(symById(p.type)&&symById(p.type).cat==='スイッチ')?'':'none';
+  el('sel-wall').style.display=wallSnappable(p)?'':'none';
+  el('sel-gang').style.display=isLinearType(p.type)?'none':'';
   const rg=el('sel-raillen-grp'); if(rg){ if(isLinearType(p.type)){ rg.style.display=''; el('sel-raillen').value=railLenMmOf(p); } else rg.style.display='none'; }
   syncLayerSelects();   // この記号のレイヤーを選択状態に
 }
@@ -1869,6 +1882,115 @@ function mselAlign(kind){
 }
 el('msel-alH').onclick=()=>mselAlign('alH'); el('msel-alV').onclick=()=>mselAlign('alV');
 el('msel-dsH').onclick=()=>mselAlign('dsH'); el('msel-dsV').onclick=()=>mselAlign('dsV');
+// ── v0.32 操作性パック ──
+// 部屋均等：選択シンボルを行×列に分け ①包含する部屋があれば部屋矩形へセル中央配置（壁際=1/2ピッチ）②なければ選択範囲で端点固定の等間隔
+function mselEven(){
+  const items=mselItems(); if(items.length<2){ toast('2個以上選択してください'); return; }
+  const thr=(mmPerPx!=null)?(600/mmPerPx):40;                      // 行分割しきい値（≒600mm）
+  const sorted=[...items].sort((a,b)=>a.y-b.y);
+  const rowsArr=[[sorted[0]]];
+  for(let i=1;i<sorted.length;i++){ const r=rowsArr[rowsArr.length-1]; if(sorted[i].y-r[r.length-1].y>thr) rowsArr.push([sorted[i]]); else r.push(sorted[i]); }
+  rowsArr.forEach(r=>r.sort((a,b)=>a.x-b.x));
+  const cx=items.reduce((s,p)=>s+p.x,0)/items.length, cy=items.reduce((s,p)=>s+p.y,0)/items.length;
+  const room=rooms.find(r=>r.x0!=null && cx>=r.x0&&cx<=r.x0+r.w && cy>=r.y0&&cy<=r.y0+r.h);
+  const ny=rowsArr.length;
+  if(room){   // 部屋基準＝自動配灯と同じセル中央（壁際が自動的に1/2ピッチ）
+    rowsArr.forEach((r,j)=>{ const y=room.y0+(room.h/ny)*(j+0.5);
+      r.forEach((p,i)=>{ p.x=Math.round(room.x0+(room.w/r.length)*(i+0.5)); p.y=Math.round(y); }); });
+  } else {    // 選択範囲基準＝外周は保ち中を等間隔
+    const xs=items.map(p=>p.x), ys=items.map(p=>p.y);
+    const X0=Math.min(...xs), X1=Math.max(...xs), Y0=Math.min(...ys), Y1=Math.max(...ys);
+    rowsArr.forEach((r,j)=>{ const y=(ny===1)?(Y0+Y1)/2 : Y0+(Y1-Y0)*j/(ny-1);
+      r.forEach((p,i)=>{ p.x=Math.round(r.length===1?(X0+X1)/2 : X0+(X1-X0)*i/(r.length-1)); p.y=Math.round(y); }); });
+  }
+  renderSyms(); renderWireInfo(); pushHistory();
+  toast(room?'部屋に対して均等配置しました（壁際=1/2ピッチ）':'選択範囲で均等配置しました');
+}
+el('msel-even').onclick=mselEven;
+// 壁ぴた：最寄りの壁線（部屋枠・作図線・DXF/JWW下敷きの線）へ吸着。コンセント/壁付照明は塗り側を壁向きに回転
+const WALL_SNAP_CATS=['コンセント','スイッチ'];
+const WALL_ROT_TYPES=['outlet','outlet2p','outletE','outletET','outletLK','outletW','outlet2P','outlet3P','bracket'];   // 塗り/壁線の向きが意味を持つ記号（床コンセントは除外）
+function wallSnappable(p){ const s=symById(p.type); return !!s && (WALL_SNAP_CATS.includes(s.cat)||p.type==='bracket'); }
+function wallSegments(){
+  const segs=[];
+  rooms.forEach(r=>{ if(r.x0!=null){ const x1=r.x0+r.w, y1=r.y0+r.h;
+    segs.push([r.x0,r.y0,x1,r.y0],[x1,r.y0,x1,y1],[r.x0,y1,x1,y1],[r.x0,r.y0,r.x0,y1]); } });
+  if(layerVisible('draw')) freelines.forEach(f=>{ for(let i=1;i<f.pts.length;i++) segs.push([f.pts[i-1][0],f.pts[i-1][1],f.pts[i][0],f.pts[i][1]]); });
+  if(baseVec && layerVisible('base')){   // ベクター下敷き（DXF/JWW）＝壁線そのもの
+    baseg.querySelectorAll('line').forEach(ln=>segs.push([+ln.getAttribute('x1'),+ln.getAttribute('y1'),+ln.getAttribute('x2'),+ln.getAttribute('y2')]));
+    baseg.querySelectorAll('polyline').forEach(pl=>{ const a=(pl.getAttribute('points')||'').trim().split(/[\s,]+/).map(Number);
+      for(let i=3;i<a.length;i+=2){ if([a[i-3],a[i-2],a[i-1],a[i]].every(isFinite)) segs.push([a[i-3],a[i-2],a[i-1],a[i]]); } });
+    // LWPOLYLINE等は <path d="M..L..Z"> で描画される → 直線区間(M/L/Z)を壁線として抽出（円弧A・相対コマンドは対象外＝安全側）
+    baseg.querySelectorAll('path').forEach(pa=>{
+      const d=pa.getAttribute('d')||''; const re=/([MLZAmlza])([^MLZAmlza]*)/g; let m,cur=null,start=null;
+      while((m=re.exec(d))){
+        const c=m[1], a=m[2].trim()?m[2].trim().split(/[\s,]+/).map(Number):[];
+        if(c==='M'){ if(a.length>=2&&isFinite(a[0])&&isFinite(a[1])){ cur=[a[0],a[1]]; start=cur;
+          for(let i=2;i+1<a.length;i+=2){ if(isFinite(a[i])&&isFinite(a[i+1])){ segs.push([cur[0],cur[1],a[i],a[i+1]]); cur=[a[i],a[i+1]]; } } } else cur=null; }
+        else if(c==='L'&&cur){ for(let i=0;i+1<a.length;i+=2){ if(isFinite(a[i])&&isFinite(a[i+1])){ segs.push([cur[0],cur[1],a[i],a[i+1]]); cur=[a[i],a[i+1]]; } } }
+        else if((c==='Z'||c==='z')&&cur&&start){ segs.push([cur[0],cur[1],start[0],start[1]]); cur=start; }
+        else cur=null;
+      }
+    });
+  }
+  return segs;
+}
+function projSeg(x,y,s){ const dx=s[2]-s[0], dy=s[3]-s[1]; const L2=dx*dx+dy*dy||1;
+  let t=((x-s[0])*dx+(y-s[1])*dy)/L2; t=Math.max(0,Math.min(1,t));
+  const px=s[0]+t*dx, py=s[1]+t*dy; return {x:px,y:py,d:Math.hypot(x-px,y-py),ang:Math.atan2(dy,dx)}; }
+function snapToWall(p, segsOpt){
+  const segs=segsOpt||wallSegments(); if(!segs.length) return 'no-walls';
+  let best=null; for(const s of segs){ const pr=projSeg(p.x,p.y,s); if(!best||pr.d<best.d) best=pr; }
+  const maxD=(mmPerPx!=null)?(2000/mmPerPx):200;                    // 2m以内の壁だけ対象（誤爆防止）
+  if(!best||best.d>maxD) return 'too-far';
+  if(WALL_ROT_TYPES.includes(p.type) && best.d>0.5){                 // 塗り側（ローカル+y）を壁の向こうへ。既に壁線上（再スナップ）は向きを保持＝反転防止
+    const n={x:-Math.sin(best.ang), y:Math.cos(best.ang)};
+    const side=Math.sign((p.x-best.x)*n.x+(p.y-best.y)*n.y)||1;
+    p.rot=Math.round((((best.ang*180/Math.PI+(side>0?180:0))%360)+360)%360);
+  }
+  p.x=Math.round(best.x); p.y=Math.round(best.y);
+  return 'ok';
+}
+function wallSnapSel(){
+  if(assignMode) return;
+  const p=placed.find(x=>x.uid===selUid); if(!p) return;
+  const r=snapToWall(p);
+  if(r==='ok'){ renderSyms(); renderWireInfo(); renderSel(); pushHistory(); toast('壁にぴったり付けました'); }
+  else toast(r==='no-walls'?'壁が見つかりません（部屋枠・作図線・DXF/JWW下敷きの線が対象）':'2m以内に壁線がありません');
+}
+el('sel-wall').onclick=wallSnapSel;
+function wallSnapMsel(){
+  const items=mselItems().filter(wallSnappable); if(!items.length){ toast('対象（コンセント/スイッチ/壁付照明）がありません'); return; }
+  const segs=wallSegments();                                        // 一括時はセグメント収集を1回に（大きなDXFでの固まり防止）
+  let n=0; items.forEach(p=>{ if(snapToWall(p,segs)==='ok') n++; });
+  if(n){ renderSyms(); renderWireInfo(); pushHistory(); toast(n+'個を壁にぴったり付けました'); } else toast('2m以内に壁線がありません');
+}
+el('msel-wall').onclick=wallSnapMsel;
+// 移動（微動）：間隔px/mm ぶんだけ矢印方向へ
+function moveSel(dx,dy){
+  if(assignMode) return;
+  const p=placed.find(x=>x.uid===selUid); if(!p) return;
+  const stepPx=(mmPerPx!=null)?(copyStep/mmPerPx):copyStep;
+  p.x=Math.round(p.x+dx*stepPx); p.y=Math.round(p.y+dy*stepPx);
+  renderSyms(); renderWireInfo(); pushHistory();
+}
+el('sel-mvL').onclick=()=>moveSel(-1,0); el('sel-mvR').onclick=()=>moveSel(1,0);
+el('sel-mvU').onclick=()=>moveSel(0,-1); el('sel-mvD').onclick=()=>moveSel(0,1);
+// 連結（＋連）：同じ記号を回転方向のすぐ隣（記号がぴったり接する間隔）へ複製。押すたび連結が伸びる
+function gangDx(type){ const s=symById(type); if(!s) return 40;
+  const annotated=/<text/.test(s.g||'');                             // 傍記(3,L,E等)付きは文字が隣と重ならない間隔に
+  if(s.cat==='スイッチ') return annotated?24:16;
+  if(s.cat==='コンセント') return annotated?26:20;
+  return 40; }
+function gangSel(){
+  if(assignMode) return;
+  const p=placed.find(x=>x.uid===selUid); if(!p) return;
+  if(isLinearType(p.type)){ toast('レールは「長さmm」で調整してください'); return; }
+  const d=gangDx(p.type), rad=p.rot*Math.PI/180;
+  const uid=pushSymbol(p.type, p.x+Math.cos(rad)*d, p.y+Math.sin(rad)*d, {rot:p.rot, layer:p.layer});
+  selUid=uid; renderSyms(); renderSel(); renderTally(); pushHistory();
+}
+el('sel-gang').onclick=gangSel;
 function startGroupDrag(ev){
   const w=toWorld(ev.clientX,ev.clientY);
   groupDrag={sx:w.x, sy:w.y, items:mselItems().map(p=>({p,ox:p.x,oy:p.y})), moved:false};
@@ -3813,7 +3935,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.31', APP_DATE='2026-07-10';
+const APP_VERSION='0.32', APP_DATE='2026-07-10';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
