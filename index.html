@@ -1920,18 +1920,30 @@ function wallSegments(){
     baseg.querySelectorAll('line').forEach(ln=>segs.push([+ln.getAttribute('x1'),+ln.getAttribute('y1'),+ln.getAttribute('x2'),+ln.getAttribute('y2')]));
     baseg.querySelectorAll('polyline').forEach(pl=>{ const a=(pl.getAttribute('points')||'').trim().split(/[\s,]+/).map(Number);
       for(let i=3;i<a.length;i+=2){ if([a[i-3],a[i-2],a[i-1],a[i]].every(isFinite)) segs.push([a[i-3],a[i-2],a[i-1],a[i]]); } });
+    // LWPOLYLINE等は <path d="M..L..Z"> で描画される → 直線区間(M/L/Z)を壁線として抽出（円弧A・相対コマンドは対象外＝安全側）
+    baseg.querySelectorAll('path').forEach(pa=>{
+      const d=pa.getAttribute('d')||''; const re=/([MLZAmlza])([^MLZAmlza]*)/g; let m,cur=null,start=null;
+      while((m=re.exec(d))){
+        const c=m[1], a=m[2].trim()?m[2].trim().split(/[\s,]+/).map(Number):[];
+        if(c==='M'){ if(a.length>=2&&isFinite(a[0])&&isFinite(a[1])){ cur=[a[0],a[1]]; start=cur;
+          for(let i=2;i+1<a.length;i+=2){ if(isFinite(a[i])&&isFinite(a[i+1])){ segs.push([cur[0],cur[1],a[i],a[i+1]]); cur=[a[i],a[i+1]]; } } } else cur=null; }
+        else if(c==='L'&&cur){ for(let i=0;i+1<a.length;i+=2){ if(isFinite(a[i])&&isFinite(a[i+1])){ segs.push([cur[0],cur[1],a[i],a[i+1]]); cur=[a[i],a[i+1]]; } } }
+        else if((c==='Z'||c==='z')&&cur&&start){ segs.push([cur[0],cur[1],start[0],start[1]]); cur=start; }
+        else cur=null;
+      }
+    });
   }
   return segs;
 }
 function projSeg(x,y,s){ const dx=s[2]-s[0], dy=s[3]-s[1]; const L2=dx*dx+dy*dy||1;
   let t=((x-s[0])*dx+(y-s[1])*dy)/L2; t=Math.max(0,Math.min(1,t));
   const px=s[0]+t*dx, py=s[1]+t*dy; return {x:px,y:py,d:Math.hypot(x-px,y-py),ang:Math.atan2(dy,dx)}; }
-function snapToWall(p){
-  const segs=wallSegments(); if(!segs.length) return 'no-walls';
+function snapToWall(p, segsOpt){
+  const segs=segsOpt||wallSegments(); if(!segs.length) return 'no-walls';
   let best=null; for(const s of segs){ const pr=projSeg(p.x,p.y,s); if(!best||pr.d<best.d) best=pr; }
   const maxD=(mmPerPx!=null)?(2000/mmPerPx):200;                    // 2m以内の壁だけ対象（誤爆防止）
   if(!best||best.d>maxD) return 'too-far';
-  if(WALL_ROT_TYPES.includes(p.type)){                               // 塗り側（ローカル+y）を壁の向こうへ
+  if(WALL_ROT_TYPES.includes(p.type) && best.d>0.5){                 // 塗り側（ローカル+y）を壁の向こうへ。既に壁線上（再スナップ）は向きを保持＝反転防止
     const n={x:-Math.sin(best.ang), y:Math.cos(best.ang)};
     const side=Math.sign((p.x-best.x)*n.x+(p.y-best.y)*n.y)||1;
     p.rot=Math.round((((best.ang*180/Math.PI+(side>0?180:0))%360)+360)%360);
@@ -1943,14 +1955,15 @@ function wallSnapSel(){
   if(assignMode) return;
   const p=placed.find(x=>x.uid===selUid); if(!p) return;
   const r=snapToWall(p);
-  if(r==='ok'){ renderSyms(); renderSel(); pushHistory(); toast('壁にぴったり付けました'); }
+  if(r==='ok'){ renderSyms(); renderWireInfo(); renderSel(); pushHistory(); toast('壁にぴったり付けました'); }
   else toast(r==='no-walls'?'壁が見つかりません（部屋枠・作図線・DXF/JWW下敷きの線が対象）':'2m以内に壁線がありません');
 }
 el('sel-wall').onclick=wallSnapSel;
 function wallSnapMsel(){
   const items=mselItems().filter(wallSnappable); if(!items.length){ toast('対象（コンセント/スイッチ/壁付照明）がありません'); return; }
-  let n=0; items.forEach(p=>{ if(snapToWall(p)==='ok') n++; });
-  if(n){ renderSyms(); pushHistory(); toast(n+'個を壁にぴったり付けました'); } else toast('2m以内に壁線がありません');
+  const segs=wallSegments();                                        // 一括時はセグメント収集を1回に（大きなDXFでの固まり防止）
+  let n=0; items.forEach(p=>{ if(snapToWall(p,segs)==='ok') n++; });
+  if(n){ renderSyms(); renderWireInfo(); pushHistory(); toast(n+'個を壁にぴったり付けました'); } else toast('2m以内に壁線がありません');
 }
 el('msel-wall').onclick=wallSnapMsel;
 // 移動（微動）：間隔px/mm ぶんだけ矢印方向へ
@@ -1959,12 +1972,16 @@ function moveSel(dx,dy){
   const p=placed.find(x=>x.uid===selUid); if(!p) return;
   const stepPx=(mmPerPx!=null)?(copyStep/mmPerPx):copyStep;
   p.x=Math.round(p.x+dx*stepPx); p.y=Math.round(p.y+dy*stepPx);
-  renderSyms(); pushHistory();
+  renderSyms(); renderWireInfo(); pushHistory();
 }
 el('sel-mvL').onclick=()=>moveSel(-1,0); el('sel-mvR').onclick=()=>moveSel(1,0);
 el('sel-mvU').onclick=()=>moveSel(0,-1); el('sel-mvD').onclick=()=>moveSel(0,1);
 // 連結（＋連）：同じ記号を回転方向のすぐ隣（記号がぴったり接する間隔）へ複製。押すたび連結が伸びる
-function gangDx(type){ const s=symById(type); if(!s) return 40; if(s.cat==='スイッチ') return 16; if(s.cat==='コンセント') return 20; return 40; }
+function gangDx(type){ const s=symById(type); if(!s) return 40;
+  const annotated=/<text/.test(s.g||'');                             // 傍記(3,L,E等)付きは文字が隣と重ならない間隔に
+  if(s.cat==='スイッチ') return annotated?24:16;
+  if(s.cat==='コンセント') return annotated?26:20;
+  return 40; }
 function gangSel(){
   if(assignMode) return;
   const p=placed.find(x=>x.uid===selUid); if(!p) return;
