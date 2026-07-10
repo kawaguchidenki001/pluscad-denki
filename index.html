@@ -377,6 +377,14 @@
   table.est input.qty{width:74px;background:var(--panel);border:1px solid var(--panel-line);color:#fff;border-radius:5px;padding:4px 6px;font-size:12px;font-family:var(--mono);text-align:right}
   .cdot{display:inline-block;width:9px;height:9px;border-radius:50%}
   .cdot.g{background:var(--confirmed)} .cdot.y{background:var(--amber)} .cdot.r{background:var(--redline)}
+  table.est tr.suggrow td{background:rgba(226,69,43,.06);padding:6px 8px;white-space:normal}
+  table.est tr.suggrow:hover td{background:rgba(226,69,43,.06)}
+  .sglab{font-size:10.5px;color:var(--redline);font-weight:700;margin-right:8px}
+  .sglab.dim{color:var(--txt-dim);font-weight:400}
+  .suggchip{display:inline-block;margin:3px 6px 3px 0;background:var(--panel2);border:1px solid var(--panel-line);color:var(--txt);border-radius:7px;padding:5px 9px;font-size:11px;font-family:var(--jp);cursor:pointer;line-height:1.3;white-space:normal;text-align:left;max-width:100%}
+  .suggchip:hover{background:var(--panel3);border-color:var(--confirmed)}
+  .suggchip b{color:#fff;font-weight:700}
+  .suggchip .sy{color:var(--txt-dim);font-family:var(--mono);font-size:10px}
   #etot{flex:none;border-top:1px solid var(--panel-line);padding:11px 16px;display:flex;gap:18px;flex-wrap:wrap;align-items:baseline;background:var(--panel2)}
   #etot .tt{font-size:11px;color:var(--txt-dim)}
   #etot .tt b{color:#fff;font-family:var(--mono);font-size:14px;margin-left:5px}
@@ -2749,6 +2757,35 @@ function candidatesFor(id){
     .filter(x=>x.s>0).sort((a,b)=>b.s-a.s).map(x=>x.r);
 }
 function scoreRec(m,r){ let s=0; m.kw.map(normStr).forEach(k=>{ if(r._n.includes(k)) s+=5; }); if(m.unit&&r.unit!==m.unit) s-=3; if(r.category.includes('再使用')) s-=6; return s; }
+// 未マッチ(赤)行の候補サジェスト（AIなし・規則ベース）：全マスタ横断＋複合語の前方部分一致で拾い、品目ごとに代表(中央値価格)を返す
+function suggestFor(id, limit=6){
+  const type=id.startsWith('sym:')?id.slice(4):id;
+  const m=SYMMAP[type]; if(!m||!MASTER_IDX) return [];
+  const kws=m.kw.map(normStr).filter(k=>k.length>=1);
+  const s=symById(type), nameN=s?normStr(s.nm):'';
+  if(!kws.length && !nameN) return [];
+  const best=new Map();   // catname -> {rec,sc}
+  MASTER.forEach(r=>{
+    let sc=0;
+    kws.forEach(k=>{
+      if(r._n.includes(k)) sc+=6;                                  // 完全一致
+      else if(k.length>=4){ for(let L=k.length-1;L>=3;L--){ if(r._n.includes(k.slice(0,L))){ sc+=Math.min(L,6)*0.6; break; } } }   // 複合語の語幹（前方一致）
+    });
+    if(nameN.length>=3 && r._n.includes(nameN)) sc+=3;
+    if(sc<=0) return;
+    if(m.cats.includes(r.category)) sc+=1;                         // 想定分類なら微加点
+    if(m.unit && r.unit!==m.unit) sc-=1.5;
+    if(/再使用/.test(r.category)) sc-=6;
+    if(sc<=0) return;
+    const key=r.category+SEP+r.name; const cur=best.get(key);
+    if(!cur || sc>cur.sc) best.set(key,{rec:r,sc});
+  });
+  return [...best.values()].sort((a,b)=>b.sc-a.sc).slice(0,limit).map(({rec})=>{
+    const g=MASTER_IDX.byName.get(rec.category+SEP+rec.name)||[rec];
+    const a=g.slice().sort((x,y)=>x.composite_price-y.composite_price); const r=a[Math.floor(a.length/2)];   // 同名は中央値価格を代表に
+    return {cat:r.category, name:r.name, spec:r.spec, work:r.work, price:r.composite_price, unit:r.unit, idx:idxOfRec(r.category,r.name,r)};
+  });
+}
 function defaultSel(id){
   const m=SYMMAP[id]; if(!m||!MASTER_IDX) return null;
   const c=candidatesFor(id); if(!c.length) return null;
@@ -2867,6 +2904,7 @@ function renderEstimate(){
   // 未確定のみ表示（黄・赤。除外行は隠す）。合計は常に全行から計算
   const shown=estPendingOnly?rows.filter(r=>!r.off&&(!r.rec||!r.user)):rows;
   const sb=estimate.opts.showBreak;
+  const ncol=11+(sb?3:0);   // 候補サジェスト行の colspan 用（全列数）
   let h='<table class="est"><thead><tr><th></th><th>記号/対象</th><th>分類</th><th>品目</th><th>規格・仕様</th><th>型番メモ</th><th class="n">数量</th><th>単位</th>'
     +(sb?'<th class="n">材料費</th><th class="n">労務費</th><th class="n">経費</th>':'')+'<th class="n">複合単価</th><th class="n">金額</th><th>除外</th></tr></thead><tbody>';
   shown.forEach(r=>{
@@ -2884,6 +2922,16 @@ function renderEstimate(){
       +`<td class="n">${r.rec?yen(price):'—'}</td>`
       +`<td class="n" data-amt>${r.off?'除外':(r.uncal?'—':(r.rec?yen(amount):'0'))}</td>`
       +`<td style="text-align:center"><input type="checkbox" class="eoff" data-id="${escAttr(r.id)}"${r.off?' checked':''}></td></tr>`;
+    // 未マッチ(赤)行だけ、単価マスタから候補をサジェスト（タップで確定＝緑に）
+    if(!r.off && !r.rec && r.kind==='device'){
+      const sug=suggestFor(r.id);
+      if(sug.length){
+        const chips=sug.map(c=>`<button class="suggchip" data-id="${escAttr(r.id)}" data-cat="${escAttr(c.cat)}" data-name="${escAttr(c.name)}" data-idx="${c.idx}" title="${escAttr(c.cat+' / '+c.name+' / '+c.spec)}"><b>${escHtml(c.name)}</b> ${escHtml(c.spec||'')} <span class="sy">¥${yen(c.price)}/${escHtml(c.unit||'')}</span></button>`).join('');
+        h+=`<tr class="suggrow"><td></td><td colspan="${ncol-1}"><span class="sglab">候補（タップで確定）:</span>${chips}</td></tr>`;
+      } else {
+        h+=`<tr class="suggrow"><td></td><td colspan="${ncol-1}"><span class="sglab dim">候補なし — 「分類」「品目」から手動で選択してください</span></td></tr>`;
+      }
+    }
   });
   h+='</tbody></table>';
   if(estPendingOnly&&!shown.length) h='<div id="enote" style="border:none">'+(nR||nY?'表示できる未確定項目がありません（除外中の可能性）。':'未確定（黄・赤）はありません。すべて確定済みです。')+'</div>';
@@ -2892,6 +2940,12 @@ function renderEstimate(){
   body.querySelectorAll('input.qty').forEach(i=>i.addEventListener('input',onQtyInput));
   body.querySelectorAll('input.eoff').forEach(c=>c.addEventListener('change',onOffChange));
   body.querySelectorAll('input.modelin').forEach(i=>i.addEventListener('input',e=>{ storeFor(e.target.dataset.id).model=e.target.value; scheduleAutosave(); }));  // 型番メモ（再描画しない＝フォーカス維持）
+  body.querySelectorAll('.suggchip').forEach(ch=>ch.addEventListener('click',()=>{   // 候補を確定（user=true＝緑）
+    const id=ch.dataset.id, cat=ch.dataset.cat, name=ch.dataset.name; const g=MASTER_IDX.byName.get(cat+SEP+name)||[];
+    const idx=+ch.dataset.idx, rec=g[idx]||g[0]; if(!rec) return;
+    setSelById(id,{cat,name,spec:rec.spec,work:rec.work,idx:g.indexOf(rec)});
+    scheduleAutosave(); renderEstimate(); toast('候補を確定しました');
+  }));
   renderTotals(rows);
 }
 function renderTotals(rows){
@@ -3697,7 +3751,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.29', APP_DATE='2026-07-10';
+const APP_VERSION='0.30', APP_DATE='2026-07-10';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
