@@ -1501,8 +1501,16 @@ function isLinearType(t){ return LINEAR_TYPES.includes(t); }
 let railLenMm=1000;                                   // 既定 1m（現場で選択）
 function railLenMmOf(p){ return (p&&p.lenMm)||1000; }
 function railLenPx(lenMm){ const px=(mmPerPx!=null)?lenMm/mmPerPx:lenMm/10; return Math.max(24, px); }   // 未較正は 10mm/px の目安。最小24pxで視認・タップ確保
+function railLenPxOut(lenMm){ return (mmPerPx!=null)?lenMm/mmPerPx:lenMm/10; }   // 出力(印刷/CAD)用：画面のタップ確保クランプを外した実長。較正時は px×mmPerPx=lenMm で実寸一致
+const RAIL_BAR_H=4;   // レールバー半太さ(world px)。画面/印刷/CADで共通
+function railBarSegs(lenPx){   // 中心(0,0)基準のレールバー輪郭(矩形)＋等間隔ティックを線分[x1,y1,x2,y2]で返す（CAD用。railBarSVGと同じ寸法・目盛り）
+  const h=RAIL_BAR_H, x0=-lenPx/2, x1=lenPx/2, segs=[[x0,-h,x1,-h],[x1,-h,x1,h],[x1,h,x0,h],[x0,h,x0,-h]];
+  const step=Math.max(14, lenPx/Math.max(2,Math.round(lenPx/22)));
+  for(let x=x0+step; x<x1-1; x+=step) segs.push([x,-h,x,h]);
+  return segs;
+}
 function railBarSVG(lenPx){   // 中心(0,0)基準の可変長レールバー＋等間隔ティック
-  const h=4, x0=-lenPx/2, x1=lenPx/2; let ticks='';
+  const h=RAIL_BAR_H, x0=-lenPx/2, x1=lenPx/2; let ticks='';
   const step=Math.max(14, lenPx/Math.max(2,Math.round(lenPx/22)));   // 目盛り間隔（過密回避）
   for(let x=x0+step; x<x1-1; x+=step) ticks+=`<line x1="${x.toFixed(1)}" y1="${-h}" x2="${x.toFixed(1)}" y2="${h}" stroke="currentColor" stroke-width="1.4"/>`;
   return `<rect x="${x0.toFixed(1)}" y="${-h}" width="${lenPx.toFixed(1)}" height="${h*2}" rx="${h}" fill="none" stroke="currentColor" stroke-width="2.2"/>${ticks}`;
@@ -3460,6 +3468,13 @@ function buildCadEntities(){
     const rot=(p.rot||0)*Math.PI/180, cs=Math.cos(rot), sn=Math.sin(rot);
     const X=(u,v)=>{ const lx=u-20, ly=v-20;
       return [ (p.x+lx*cs-ly*sn)*mm, -(p.y+lx*sn+ly*cs)*mm ]; };   // Y反転=鏡映1回
+    if(isLinearType(p.type)){   // 線状シンボル(レール)：固定アイコンでなく選択長の可変長バーを実寸で出力
+      for(const [ax,ay,bx,by] of railBarSegs(railLenPxOut(railLenMmOf(p)))){
+        const A=X(ax+20,ay+20), B=X(bx+20,by+20);   // seg は中心0基準→X() のローカル20中心へ寄せる
+        addLine(A[0],A[1],B[0],B[1],lname,lidx,col);
+      }
+      continue;
+    }
     const prims=symbolIR(p.type);
     // 「抜き」傍記(画面では背景色#12151aで白抜きに見える)を持つ記号は、
     // 単色CADで傍記が塗りに埋もれないよう塗りを省略し輪郭＋傍記で表現する
@@ -3588,7 +3603,13 @@ function printInk(c){  // 白背景で見えない明色（盤・機器の#EDEBE
 function printRect(){  // 用紙範囲∪配置範囲（回転40×40シンボルの外接≒28px余裕）∪注記範囲
   let x0=0, y0=0, x1=baseW, y1=baseH;
   const M=28;
-  placed.forEach(p=>{ x0=Math.min(x0,p.x-M); x1=Math.max(x1,p.x+M); y0=Math.min(y0,p.y-M); y1=Math.max(y1,p.y+M); });
+  placed.forEach(p=>{
+    if(isLinearType(p.type)){   // 線状(レール)：半長ぶん外接を広げないと長いレールが印刷でクリップされる
+      const hw=railLenPxOut(railLenMmOf(p))/2, r=(p.rot||0)*Math.PI/180;
+      const ex=Math.abs(hw*Math.cos(r))+8, ey=Math.abs(hw*Math.sin(r))+8;
+      x0=Math.min(x0,p.x-ex); x1=Math.max(x1,p.x+ex); y0=Math.min(y0,p.y-ey); y1=Math.max(y1,p.y+ey);
+    } else { x0=Math.min(x0,p.x-M); x1=Math.max(x1,p.x+M); y0=Math.min(y0,p.y-M); y1=Math.max(y1,p.y+M); }
+  });
   texts.forEach(t=>{ const m=textW(t)/2+t.size; x0=Math.min(x0,t.x-m); x1=Math.max(x1,t.x+m); y0=Math.min(y0,t.y-m); y1=Math.max(y1,t.y+m); });
   freelines.forEach(f=>f.pts.forEach(p=>{ x0=Math.min(x0,p[0]); x1=Math.max(x1,p[0]); y0=Math.min(y0,p[1]); y1=Math.max(y1,p[1]); }));
   return {vx:Math.floor(x0), vy:Math.floor(y0), vw:Math.ceil(x1-x0), vh:Math.ceil(y1-y0)};
@@ -3614,6 +3635,8 @@ function buildPrintSVG(){
   const uses=placed.map(p=>{
     const s=symById(p.type); if(!s) return '';
     if(!layerVisible(p.layer)) return '';                   // 非表示レイヤーは印刷しない
+    if(isLinearType(p.type))                                // 線状(レール)：選択長の可変長バーで印刷（固定アイコンにしない）
+      return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(colorOf(p.type))}">${railBarSVG(railLenPxOut(railLenMmOf(p)))}</g>`;
     return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(colorOf(p.type))}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
   }).join('');
   const flg=(layerVisible('draw')?freelines:[]).map(f=>`<path d="M ${f.pts.map(p=>p.join(' ')).join(' L ')}" fill="none" stroke="#333" stroke-width="1.4"/>`).join('');
@@ -3935,7 +3958,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.32', APP_DATE='2026-07-10';
+const APP_VERSION='0.33', APP_DATE='2026-07-10';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
