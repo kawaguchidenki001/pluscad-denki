@@ -302,6 +302,29 @@
   #ps-empty{color:var(--txt-dim);font-size:13px;padding:20px 4px}
   #wireinfo .psbtn{margin:6px 0 0;width:100%;background:var(--panel2);border:1px solid var(--panel-line);color:var(--txt);border-radius:8px;padding:7px;font-size:11.5px;font-weight:700;font-family:var(--jp);cursor:pointer}
   #wireinfo .psbtn:hover{background:var(--panel3)}
+  /* 図面チェックモーダル（v0.27） */
+  #modal-check{position:fixed;inset:0;z-index:61;background:var(--panel);display:none;flex-direction:column;color:var(--txt)}
+  #modal-check.show{display:flex}
+  #modal-check .ehead{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--panel-line)}
+  #modal-check .ehead h3{margin:0;font-size:15px}
+  #modal-check .pspacer{flex:1}
+  #modal-check .ehead button,#ck-foot button{border:1px solid var(--panel-line);background:var(--panel2);color:var(--txt);border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  #ck-foot button.acc{background:var(--acc,#2d7d5a);border-color:var(--acc,#2d7d5a);color:#fff}
+  #ck-body{flex:1;overflow:auto;padding:12px 16px}
+  #ck-note{flex:none;font-size:10.5px;color:var(--txt-dim);padding:8px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
+  #ck-foot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
+  .ckgrp{font-size:12px;color:var(--txt-dim);margin:10px 0 4px;font-weight:700}
+  .ckitem{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--panel-line);border-radius:8px;margin-bottom:6px;background:var(--panel2)}
+  .ckitem .cksev{flex:none;font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .ckitem .cksev.warn{background:rgba(226,69,43,.16);color:#f0a9a0;border:1px solid rgba(226,69,43,.4)}
+  .ckitem .cksev.info{background:rgba(38,198,218,.14);color:#8fd6e0;border:1px solid rgba(38,198,218,.35)}
+  .ckitem .ckmsg{flex:1;font-size:12.5px;line-height:1.5}
+  .ckitem .ckjump{flex:none;border:1px solid var(--panel-line);background:var(--panel);color:var(--txt);border-radius:6px;padding:5px 10px;font-size:11.5px;font-weight:700;font-family:var(--jp);cursor:pointer}
+  .ckitem .ckjump:hover{background:var(--panel3)}
+  #ck-empty{color:#8fd6e0;font-size:14px;padding:24px 6px;text-align:center}
+  #ck-empty b{color:#fff}
+  .sym.ckflash .selbox{display:block!important;fill:rgba(255,209,102,.28);stroke:#FFD166;stroke-width:3;animation:ckpulse .5s ease-in-out 0s 3}
+  @keyframes ckpulse{0%,100%{opacity:1}50%{opacity:.25}}
   #modal-estimate .ehead{flex:none;display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--panel-line)}
   #modal-estimate .ehead h3{margin:0;font-size:15px}
   .echip{font-size:11px;font-family:var(--mono);padding:4px 9px;border-radius:6px;border:1px solid var(--panel-line);background:var(--panel2);color:var(--txt-dim)}
@@ -374,6 +397,7 @@
     <button id="btn-snap" title="グリッドに吸着（配置・移動・整列がきれいに揃う）">スナップ</button>
     <button id="btn-esnap" title="読取点スナップ：DXF/JWW下敷きの線の端点・角・中心や配置済み記号に吸着（正確なトレース向け）">読取点</button>
     <span class="pdfdim" id="gridwrap" style="display:none"><span>間隔</span><input id="grid-mm" type="number" min="1" step="5" value="455" style="width:56px;height:24px;border:1px solid var(--panel-line);background:var(--panel);color:#fff;border-radius:6px;text-align:right;font-family:var(--mono);font-size:12px;padding:0 4px"><span id="grid-unit">mm</span></span>
+    <button id="btn-check" title="配置・回路の不備（未結線・回路未割当・スイッチ未割当・過負荷・記号の重なり等）を自動チェック">図面チェック</button>
     <button id="btn-estimate">見積</button>
     <span id="expwrap">
       <button id="btn-export">書き出し ▾</button>
@@ -666,6 +690,22 @@
     <div id="ps-note">※想定負荷[VA]は種別ごとの目安値（コンセント=150VA/口、照明=器具別、内線規程を参考にした概算）です。実負荷は器具仕様でご確認ください。回路番号・名称は「自動配線」を再実行すると振り直されます。／警告：合計が20A(2000VA)を超える／専用回路が望ましい機器を含む回路に表示。</div>
     <div id="ps-foot">
       <button id="ps-csv" class="acc">盤表CSV</button>
+    </div>
+  </div>
+
+  <!-- 図面チェックモーダル（v0.27） -->
+  <div id="modal-check">
+    <div class="ehead">
+      <h3>図面チェック</h3>
+      <span id="ck-summary" class="echip"></span>
+      <span class="pspacer"></span>
+      <button id="ck-recheck">再チェック</button>
+      <button id="ck-close">閉じる</button>
+    </div>
+    <div id="ck-body"></div>
+    <div id="ck-note">※機械的なチェックの目安です。設計意図により正しい配置でも指摘されることがあります（例：人感センサ照明はスイッチ不要）。「位置へ」で該当記号を選択・中央表示します。</div>
+    <div id="ck-foot">
+      <button id="ck-csv" class="acc">チェックCSV</button>
     </div>
   </div>
 
@@ -2518,6 +2558,108 @@ function exportPanelCSV(){
 }
 el('ps-close').onclick=()=>el('modal-panel').classList.remove('show');
 el('ps-csv').onclick=exportPanelCSV;
+
+// ── 図面チェック（v0.27）：配置・回路の不備を機械チェック ──
+function nmOf(p){ return (symById(p.type)||{}).nm||p.type; }
+function runChecks(){
+  const out=[];   // {sev:'warn'|'info', msg, uid?}
+  const isLight=p=>catOf(p)==='照明', isSwitch=p=>catOf(p)==='スイッチ', isOutlet=p=>catOf(p)==='コンセント';
+  const wired=new Set(); wires.forEach(w=>{ wired.add(w.a); wired.add(w.b); });
+  const lights=placed.filter(isLight), switches=placed.filter(isSwitch), outlets=placed.filter(isOutlet);
+  // 全体チェック
+  if(mmPerPx==null && wires.length) out.push({sev:'warn', msg:'縮尺が未較正です。配線長・見積の配線数量が算出されません（「縮尺を設定」で2点＋実寸mmを入力）。'});
+  const panels=placed.filter(p=>p.type==='panelD'||p.type==='panelH');
+  if(!panels.length && (lights.length||outlets.length)) out.push({sev:'warn', msg:'分電盤（□対角半分塗り）／主分電盤(H)が配置されていません。電源送りの起点がありません。'});
+  if(lights.length && !switches.length) out.push({sev:'warn', msg:`照明が${lights.length}点ありますが、点滅器（スイッチ）が1つも配置されていません。`});
+  // 個別チェック
+  placed.forEach(p=>{
+    const cat=catOf(p);
+    const wireable = isLight(p)||isOutlet(p)||isSwitch(p)||cat==='盤・機器';
+    if(wireable && !wired.has(p.uid)) out.push({sev:'info', msg:`未結線：「${nmOf(p)}」が配線されていません。`, uid:p.uid});
+    if((isLight(p)||isOutlet(p)) && !p.circuit) out.push({sev:'info', msg:`回路未割当：「${nmOf(p)}」に回路番号がありません（「自動配線」で割当）。`, uid:p.uid});
+  });
+  switches.forEach(sw=>{
+    const ctl=(sw.controls||[]).filter(u=>{ const p=placed.find(x=>x.uid===u); return p&&isLight(p); });
+    if(ctl.length) return;                          // 明示割当あり＝OK
+    const wiredToLight=wires.some(w=>{              // 配線で照明とつながっていればOK（自動配線の最寄り結線を含む）
+      if(w.a!==sw.uid && w.b!==sw.uid) return false;
+      const other=placed.find(p=>p.uid===(w.a===sw.uid?w.b:w.a));
+      return other && isLight(other);
+    });
+    if(!wiredToLight) out.push({sev:'info', msg:`点灯照明とつながっていない点滅器（選択→「点灯照明」で指定するか、照明へ配線してください）。`, uid:sw.uid});
+  });
+  // 過負荷・専用回路（盤表の判定を流用）
+  circuitKeys().forEach(c=>{ if(!c) return; circuitWarns(c).forEach(w=>out.push({sev:'warn', msg:`回路${c}：${w}${circuitName(c)?'（'+circuitName(c)+'）':''}`})); });
+  // 記号の重なり（≒50mm以内。重複配置・二重拾いの元）。大量配置時は打ち切り。
+  const TH = mmPerPx ? (50/mmPerPx) : 6;
+  const N=placed.length;
+  if(N<=1200){
+    const seen=new Set();
+    for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
+      const a=placed[i], b=placed[j];
+      if(Math.abs(a.x-b.x)<=TH && Math.abs(a.y-b.y)<=TH){
+        if(seen.has(a.uid)) continue; seen.add(a.uid);
+        out.push({sev:'info', msg:`記号が重なっています：「${nmOf(a)}」と「${nmOf(b)}」（位置を離すか重複を削除）。`, uid:a.uid});
+      }
+    }
+  } else out.push({sev:'info', msg:`記号が${N}点と多いため、重なりチェックは省略しました。`});
+  return out;
+}
+function openCheck(){
+  if(document.getElementById('uploader').style.display!=='none'){ toast('先に図面を開くか「下敷きなしで始める」を選んでください'); return; }
+  renderCheckList();
+  el('modal-check').classList.add('show');
+}
+let lastChecks=[];
+function renderCheckList(){
+  lastChecks=runChecks();
+  const body=el('ck-body'), sum=el('ck-summary');
+  const warns=lastChecks.filter(x=>x.sev==='warn'), infos=lastChecks.filter(x=>x.sev==='info');
+  sum.textContent=`注意 ${warns.length} ／ 情報 ${infos.length}`;
+  sum.className='echip'+(warns.length?' err':(infos.length?'':' ok'));
+  if(!lastChecks.length){ body.innerHTML='<div id="ck-empty">✓ <b>指摘はありません。</b><br>配置・回路の主要チェックをすべて通過しました。</div>'; return; }
+  const row=x=>`<div class="ckitem"><span class="cksev ${x.sev}">${x.sev==='warn'?'注意':'情報'}</span>`
+    +`<span class="ckmsg">${escHtml(x.msg)}</span>`
+    +(x.uid!=null?`<button class="ckjump" data-uid="${x.uid}">位置へ</button>`:'')+`</div>`;
+  let html='';
+  if(warns.length) html+=`<div class="ckgrp">注意（要確認・${warns.length}）</div>`+warns.map(row).join('');
+  if(infos.length) html+=`<div class="ckgrp">情報（改善の目安・${infos.length}）</div>`+infos.map(row).join('');
+  body.innerHTML=html;
+  body.querySelectorAll('.ckjump').forEach(b=>b.onclick=()=>{
+    el('modal-check').classList.remove('show');   // 盤面を見せる
+    focusOnUid(+b.dataset.uid);
+  });
+}
+function focusOnUid(uid){
+  const p=placed.find(x=>x.uid===uid); if(!p) return false;
+  if(!layerVisible(p.layer)) toast('この記号のレイヤーは非表示です（レイヤーで表示に戻せます）');
+  const r=stage.getBoundingClientRect();
+  if(!isFinite(scale)||scale<=0) scale=1;
+  if(scale<0.6) scale=1;                          // 引きすぎなら少し寄る
+  tx=r.width/2 - p.x*scale; ty=r.height/2 - p.y*scale; applyView();
+  if(layerSelectable(p.layer)){
+    if(selSet.length) mselClear();                // 複数選択バーを残さない
+    if(selTextUid!=null){ selTextUid=null; renderTexts(); }
+    clearFreeSel(); selUid=uid;
+  }
+  renderSyms(); renderSel();
+  const node=symg.querySelector(`.sym[data-uid="${uid}"]`);
+  if(node){ node.classList.add('ckflash'); setTimeout(()=>{ if(node) node.classList.remove('ckflash'); },1600); }
+  return true;
+}
+function exportCheckCSV(){
+  const list=(lastChecks&&lastChecks.length)?lastChecks:runChecks();
+  const out=[['図面チェック',estimate.head.name||''],[],['区分','内容']];
+  list.forEach(x=>out.push([x.sev==='warn'?'注意':'情報', x.msg]));
+  if(!list.length) out.push(['—','指摘なし']);
+  const csv='﻿'+out.map(r=>r.map(csvCell).join(',')).join('\r\n');
+  dl(new Blob([csv],{type:'text/csv'}),'check_'+ts()+'.csv'); toast('チェック結果CSVを書き出しました');
+}
+el('btn-check').onclick=openCheck;
+el('ck-close').onclick=()=>el('modal-check').classList.remove('show');
+el('ck-recheck').onclick=renderCheckList;
+el('ck-csv').onclick=exportCheckCSV;
+
 function cableKeyFor(w){
   const cs=(estimate.wire&&estimate.wire.circuitSpec)||{};
   const c=(w.circuit==null?0:w.circuit);
@@ -3498,7 +3640,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.26', APP_DATE='2026-07-09';
+const APP_VERSION='0.27', APP_DATE='2026-07-09';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
