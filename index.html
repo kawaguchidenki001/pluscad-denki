@@ -374,6 +374,11 @@
   #expmenu .expchk input{width:15px;height:15px;flex:none}
   #expmenu .exprow{display:flex;align-items:center;gap:6px;padding:9px 14px;font-size:11px;color:var(--txt);border-bottom:1px solid var(--panel-line);flex-wrap:wrap}
   #expmenu .exprow select{flex:1;min-width:74px;height:26px;background:var(--panel);color:#fff;border:1px solid var(--panel-line);border-radius:6px;font-size:11px;font-family:var(--jp)}
+  #expmenu .expf{display:flex;flex-direction:column;gap:6px;padding:9px 14px;border-bottom:1px solid var(--panel-line)}
+  #expmenu .expf .expftit{font-size:10.5px;color:var(--txt-dim);font-weight:700}
+  #expmenu .expf label{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txt)}
+  #expmenu .expf label span{flex:none;width:52px;color:var(--txt-dim)}
+  #expmenu .expf input{flex:1;min-width:0;height:26px;background:var(--panel);color:#fff;border:1px solid var(--panel-line);border-radius:6px;font-size:11px;font-family:var(--jp);padding:0 7px}
   #enote{flex:none;font-size:10.5px;color:var(--txt-dim);padding:7px 16px;line-height:1.55;border-top:1px solid var(--panel-line)}
   #efoot{flex:none;padding:10px 16px;border-top:1px solid var(--panel-line);display:flex;gap:10px;justify-content:flex-end}
 </style>
@@ -406,6 +411,12 @@
         <button id="exp-jww">完成図 JWW（.jww）</button>
         <button id="exp-print">印刷（PDF保存）</button>
         <label class="expchk"><input type="checkbox" id="exp-frame" checked>図枠・タイトル欄・凡例表を付ける（印刷）</label>
+        <div class="expf" id="expfields">
+          <div class="expftit">タイトル欄の項目（任意・空欄は非表示）</div>
+          <label><span>図面名</span><input id="exp-dname" type="text" placeholder="電気設備平面図 など"></label>
+          <label><span>図面番号</span><input id="exp-dno" type="text" placeholder="E-01 など"></label>
+          <label><span>担当者</span><input id="exp-author" type="text" placeholder="作図者名（端末に既定として保存）"></label>
+        </div>
         <div class="exprow"><span>用紙</span><select id="print-paper">
           <option value="a4l">A4 横</option><option value="a4p">A4 縦</option>
           <option value="a3l">A3 横</option><option value="a3p">A3 縦</option>
@@ -872,7 +883,7 @@ let MASTER=null;          // 単価マスタ配列（ランタイムのみ・保
 let MASTER_IDX=null;      // {byCat:Map, byName:Map, cats:[]}
 let masterLoading=null;   // fetch多重防止
 function defaultEstimate(){
-  return { head:{name:'',to:'',addr:'',no:'',date:''},
+  return { head:{name:'',to:'',addr:'',no:'',date:'',drawingName:'',drawingNo:'',author:''},   // drawingName/No・author=図枠タイトル欄（v0.28）
     opts:{siteRate:0, adminRate:0, discount:0, taxRate:10, roundDown:true, showBreak:false},
     lines:{},   // [記号id]: {cat,name,spec,work,qty,off,user}（ユーザー上書きのみ保持）
     wire:{slack:10, conduitOn:false, groups:{}, conduit:{}, manualLen:{}, circuitSpec:{}, lineType:{}, circuitName:{}} };  // circuitSpec:回路→ケーブルkey, lineType:回路→線種key, circuitName:回路→用途名
@@ -2912,6 +2923,21 @@ el('e-confirm-all').onclick=()=>{   // 自動割当（黄）を一括確定＝us
   else toast('確定できる自動割当（黄）はありません');
 };
 ['name','to','addr','no','date'].forEach(k=>{ el('eh-'+k).oninput=()=>{ estimate.head[k]=el('eh-'+k).value; }; });
+// 図枠タイトル欄（v0.28）：図面名・図面番号は案件ごと、担当者は端末に既定保存（新規案件に自動補完）
+function authorDefault(){ try{ return localStorage.getItem('pluscad_author')||''; }catch(e){ return ''; } }
+function syncTitleFields(){
+  const h=estimate.head||(estimate.head={});
+  el('exp-dname').value=h.drawingName||'';
+  el('exp-dno').value=h.drawingNo||'';
+  // 未入力の新規案件だけ端末既定を補完。ユーザーが一度でも触れた(authorSet)案件は空欄も尊重＝再シードしない
+  if(!h.authorSet && !h.author){ const d=authorDefault(); if(d) h.author=d; }
+  el('exp-author').value=h.author||'';
+}
+el('exp-dname').oninput=()=>{ estimate.head.drawingName=el('exp-dname').value; scheduleAutosave(); };
+el('exp-dno').oninput=()=>{ estimate.head.drawingNo=el('exp-dno').value; scheduleAutosave(); };
+el('exp-author').oninput=()=>{ const v=el('exp-author').value; estimate.head.author=v; estimate.head.authorSet=true;
+  if(v){ try{ localStorage.setItem('pluscad_author', v); }catch(e){} }   // 空欄クリアでは端末既定を消さない（他案件の既定を破壊しない）
+  scheduleAutosave(); };
 
 function exportEstimateCSV(){
   if(!MASTER_IDX){ toast('先に単価マスタを読み込んでください'); return; }
@@ -3347,9 +3373,14 @@ function buildTitleBlockSVG(rc){
   const h=estimate.head||{};
   const scSel=(el('print-scale')&&el('print-scale').value)||'fit';   // 固定縮尺印刷なら 1:S を表示
   const scaleLabel=(mmPerPx==null)?'—':(scSel!=='fit'?`1:${scSel}`:'実寸(mm)');
-  const rows=[['工事名', h.name||''],['宛先', h.to||'']];
+  const rows=[];
+  if(h.drawingName) rows.push(['図面名', h.drawingName]);
+  rows.push(['工事名', h.name||''],['宛先', h.to||'']);
   if(h.addr) rows.push(['住所', h.addr]);
-  rows.push(['見積番号', h.no||''],['作成日', h.date||fmtTs(Date.now()).slice(0,10)],['縮尺', scaleLabel]);
+  if(h.drawingNo) rows.push(['図面番号', h.drawingNo]);
+  rows.push(['見積番号', h.no||''],['作成日', h.date||fmtTs(Date.now()).slice(0,10)]);
+  if(h.author) rows.push(['担当者', h.author]);
+  rows.push(['縮尺', scaleLabel]);
   const tbW=Math.min(rc.vw*0.42, 78*S), tbH=(rows.length)*fs*1.8, tbX=x1-S*0.8-tbW, tbY=y1-S*0.8-tbH;
   g+=`<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="#fff" stroke="#111" stroke-width="${sw*1.5}"/>`;
   rows.forEach((r,i)=>{ const ry=tbY+i*fs*1.8;
@@ -3457,7 +3488,7 @@ function exportPrint(){
 }
 
 // メニューUI
-el('btn-export').onclick=ev=>{ ev.stopPropagation(); el('expmenu').classList.toggle('show'); };
+el('btn-export').onclick=ev=>{ ev.stopPropagation(); if(!el('expmenu').classList.contains('show')) syncTitleFields(); el('expmenu').classList.toggle('show'); };
 // キャプチャ段で監視（配灯パネル等のstopPropagationはバブル段のみ止めるため確実に閉じる）
 document.addEventListener('pointerdown',ev=>{ if(!ev.target.closest('#expwrap')) el('expmenu').classList.remove('show'); },true);
 el('exp-dxf').onclick=()=>{ el('expmenu').classList.remove('show'); exportDXF(); };
@@ -3640,7 +3671,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.27', APP_DATE='2026-07-09';
+const APP_VERSION='0.28', APP_DATE='2026-07-10';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
