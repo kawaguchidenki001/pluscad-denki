@@ -82,6 +82,26 @@
   #zoom button:hover{background:var(--panel3)}
   #zoom button.sm{font-size:11px;font-weight:700}
 
+  /* ---- 現場モード（v0.29）：スマホ現場向けに文字・ボタン・記号を大きく＋高コントラスト ---- */
+  body.site{ --txt:#FFFFFF; --txt-dim:#C8CED7; --panel-line:#4A5462; }   /* 屋外で見やすい高コントラスト */
+  body.site header{gap:10px;padding-top:calc(8px + env(safe-area-inset-top))}
+  body.site header button{padding:11px 16px;font-size:15px;min-height:44px}
+  body.site header .ttl{font-size:15px}
+  body.site #palette{width:172px;padding:10px 8px}
+  body.site #palette .pcat{font-size:11px}
+  body.site .palbtn{padding:8px 3px 6px;border-width:2px}
+  body.site .palbtn svg{width:36px;height:36px}
+  body.site .palbtn .nm{font-size:11px}
+  body.site #pal-q{height:42px;font-size:15px}
+  body.site #selbar button,body.site #mselbar button,body.site #tselbar button{width:46px;height:46px;font-size:20px}
+  body.site #selbar .lbl,body.site #mselbar .lbl,body.site #tselbar .lbl{font-size:15px}
+  body.site #selbar button.dir,body.site #mselbar button.dir,body.site #tselbar button.dir{width:44px;height:44px;font-size:20px}
+  body.site #mselbar button.wd,body.site #tselbar button.wd{font-size:14px;height:46px}
+  body.site #zoom button{width:52px;height:52px;font-size:24px}
+  body.site #zoom button.sm{font-size:14px}
+  body.site #hint{font-size:14px}
+  body.site .toast{font-size:16px;padding:14px 22px}
+
   /* 選択中シンボルの操作バー */
   #selbar,#mselbar,#tselbar{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:7;display:none;
     max-width:calc(100vw - 20px);flex-wrap:wrap;justify-content:center;
@@ -431,6 +451,7 @@
     <span class="scaleinfo" id="scaleinfo">縮尺：未設定</span>
     <span class="spacer"></span>
     <span class="pdfdim" title="下敷き(PDF/画像)の濃さ"><span>下敷き濃さ</span><input id="base-op" type="range" min="20" max="100" value="100"></span>
+    <button id="btn-site" title="現場モード：文字・ボタン・記号を大きく、コントラストを上げる（スマホ現場向け・端末に保存）">現場モード</button>
     <button id="btn-invert" title="背景の白黒を反転（暗い背景で見やすく）">背景反転</button>
     <button id="btn-save">保存</button>
     <button id="btn-load">読込</button>
@@ -1119,6 +1140,11 @@ function applyBgInvert(){
   const b=el('btn-invert'); if(b) b.classList.toggle('on',bgInvert);
 }
 el('btn-invert').onclick=()=>{ bgInvert=!bgInvert; applyBgInvert(); scheduleAutosave(); toast(bgInvert?'背景を反転しました（白→黒）':'背景を戻しました'); };
+// 現場モード（v0.29）：端末ごとの表示プリセット（案件保存とは独立・localStorage）
+let siteMode=false; try{ siteMode=localStorage.getItem('pluscad_sitemode')==='1'; }catch(e){}
+function applySiteMode(){ document.body.classList.toggle('site', siteMode); const b=el('btn-site'); if(b) b.classList.toggle('on', siteMode); }
+el('btn-site').onclick=()=>{ siteMode=!siteMode; try{ localStorage.setItem('pluscad_sitemode', siteMode?'1':'0'); }catch(e){} applySiteMode(); toast(siteMode?'現場モード ON（文字・ボタンを大きく表示）':'現場モード OFF'); };
+applySiteMode();
 // 下敷きレイヤーの表示ON/OFF（ラスタ＝#baseimg、ベクター＝#baseg 両方を切替）
 function applyBaseLayer(){ const v=layerVisible('base'); if(baseimg) baseimg.style.visibility=v?'':'hidden'; if(baseg) baseg.style.visibility=v?'':'hidden'; }
 
@@ -3671,7 +3697,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.28', APP_DATE='2026-07-10';
+const APP_VERSION='0.29', APP_DATE='2026-07-10';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
