@@ -2782,7 +2782,8 @@ function suggestFor(id, limit=6){
   });
   return [...best.values()].sort((a,b)=>b.sc-a.sc).slice(0,limit).map(({rec})=>{
     const g=MASTER_IDX.byName.get(rec.category+SEP+rec.name)||[rec];
-    const a=g.slice().sort((x,y)=>x.composite_price-y.composite_price); const r=a[Math.floor(a.length/2)];   // 同名は中央値価格を代表に
+    const a=g.slice().sort((x,y)=>x.composite_price-y.composite_price); const med=a[Math.floor(a.length/2)];   // 中央値価格の仕様を代表に選ぶ
+    const r=g.find(x=>x.spec===med.spec && x.work===med.work)||med;   // 確定は同spec先頭に解決される→チップ表示価格＝確定後価格を保証（重複タプル対策）
     return {cat:r.category, name:r.name, spec:r.spec, work:r.work, price:r.composite_price, unit:r.unit, idx:idxOfRec(r.category,r.name,r)};
   });
 }
