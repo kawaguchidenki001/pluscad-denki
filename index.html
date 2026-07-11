@@ -815,7 +815,7 @@ const SYMBOLS = [
   {id:'chande',  nm:'シャンデリヤ(CH)',cat:'照明', color:'#E8B23A',
    g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24" font-size="8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">CH</text>'},
   {id:'bracket', nm:'壁付(ブラケット)',cat:'照明', color:'#E8B23A',
-   g:'<circle cx="20" cy="18" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="9" y1="28" x2="31" y2="28" stroke="currentColor" stroke-width="2.2"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/>'},
   {id:'base_lt', nm:'蛍光/LEDベース',cat:'照明', color:'#E8B23A',
    g:'<rect x="6" y="15" width="28" height="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="20" y1="15" x2="20" y2="25" stroke="currentColor" stroke-width="1.4"/>'},
   {id:'fujikasa',nm:'笠付/逆富士',cat:'照明', color:'#E8B23A',
@@ -3961,7 +3961,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.35', APP_DATE='2026-07-10';
+const APP_VERSION='0.36', APP_DATE='2026-07-10';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
