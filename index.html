@@ -807,49 +807,49 @@ const SYMBOLS = [
   {id:'light',   nm:'一般照明',   cat:'照明', color:'#E8B23A',
    g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/>'},
   {id:'down',    nm:'ダウンライト',cat:'照明', color:'#E8B23A',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M14 14 L26 26 M26 14 L14 26" stroke="currentColor" stroke-width="1.8"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24" font-size="8.5" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">DL</text>'},
   {id:'ceiling', nm:'シーリング(CL)',cat:'照明', color:'#E8B23A',
    g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24" font-size="8.5" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">CL</text>'},
   {id:'pendant', nm:'ペンダント(P)',cat:'照明', color:'#E8B23A',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="10" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">P</text>'},
+   g:'<line x1="20" y1="7.5" x2="20" y2="15" stroke="currentColor" stroke-width="1.8"/><circle cx="20" cy="23.5" r="8" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="27" font-size="7.6" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">P</text>'},
   {id:'chande',  nm:'シャンデリヤ(CH)',cat:'照明', color:'#E8B23A',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24" font-size="8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">CH</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M20 20 L20 11 M20 20 L12.5 24.5 M20 20 L27.5 24.5" stroke="currentColor" stroke-width="1.5" fill="none"/><circle cx="20" cy="11" r="1.7" fill="currentColor"/><circle cx="12.5" cy="24.5" r="1.7" fill="currentColor"/><circle cx="27.5" cy="24.5" r="1.7" fill="currentColor"/>'},
   {id:'bracket', nm:'壁付(ブラケット)',cat:'照明', color:'#E8B23A',
-   g:'<circle cx="20" cy="18" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="9" y1="28" x2="31" y2="28" stroke="currentColor" stroke-width="2.2"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/>'},
   {id:'base_lt', nm:'蛍光/LEDベース',cat:'照明', color:'#E8B23A',
-   g:'<rect x="6" y="15" width="28" height="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="20" y1="15" x2="20" y2="25" stroke="currentColor" stroke-width="1.4"/>'},
+   g:'<rect x="4" y="16.5" width="32" height="7" fill="none" stroke="currentColor" stroke-width="2.2"/>'},
   {id:'fujikasa',nm:'笠付/逆富士',cat:'照明', color:'#E8B23A',
-   g:'<rect x="6" y="15" width="28" height="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="6" y1="20" x2="34" y2="20" stroke="currentColor" stroke-width="1.4"/>'},
+   g:'<rect x="4" y="16" width="32" height="8" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="4" y1="20" x2="36" y2="20" stroke="currentColor" stroke-width="1.3"/>'},
   {id:'emg_inc', nm:'非常照明(白熱)',cat:'照明', color:'#D9522B',
-   g:'<circle cx="20" cy="20" r="10" fill="currentColor"/><path d="M14 14 L26 26 M26 14 L14 26" stroke="#12151a" stroke-width="1.8"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="currentColor"/>'},
   {id:'emg_fl',  nm:'非常照明(蛍光)',cat:'照明', color:'#D9522B',
    g:'<rect x="6" y="15" width="28" height="10" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="16" y="15" width="8" height="10" fill="currentColor"/>'},
   {id:'exit',    nm:'誘導灯',     cat:'照明', color:'#1F9A60',
-   g:'<rect x="9" y="12" width="22" height="16" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M14 20 h9 M20 16 l4 4 -4 4" stroke="currentColor" stroke-width="1.8" fill="none"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="currentColor"/><path d="M13.4 13.4 L26.6 26.6 M26.6 13.4 L13.4 26.6" stroke="#12151a" stroke-width="2.4" fill="none"/>'},
   {id:'rail',    nm:'ライティングレール',cat:'照明', color:'#E8B23A',
    g:'<rect x="4" y="16" width="32" height="8" rx="4" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="13" y1="16" x2="13" y2="24" stroke="currentColor" stroke-width="1.6"/><line x1="20" y1="16" x2="20" y2="24" stroke="currentColor" stroke-width="1.6"/><line x1="27" y1="16" x2="27" y2="24" stroke="currentColor" stroke-width="1.6"/>'},
   {id:'spot',    nm:'スポットライト',cat:'照明', color:'#E8B23A',
    g:'<circle cx="16" cy="20" r="8" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M23 15 L33 20 L23 25 Z" fill="currentColor"/>'},
 
-  // ---- コンセント（下半分＝壁側を黒塗り） ----
+  // ---- コンセント（○＋中央に縦2本線＋壁側=下を黒塗り。傍記は右上。工事士.com「コンセント記号一覧」準拠） ----
   {id:'outlet',  nm:'コンセント', cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/>'},
   {id:'outlet2p',nm:'2口',        cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/><text x="20" y="16" font-size="8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">2</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/><text x="31" y="13" font-size="9" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">2</text>'},
   {id:'outletE', nm:'接地極付(E)', cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/><text x="20" y="15.5" font-size="8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">E</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/><text x="31" y="13" font-size="9" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">E</text>'},
   {id:'outletET',nm:'接地端子付(ET)',cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/><text x="20" y="15.5" font-size="6.5" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">ET</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/><text x="32" y="12.8" font-size="6.8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">ET</text>'},
   {id:'outletLK',nm:'抜止(LK)',   cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/><text x="20" y="15.5" font-size="6.5" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">LK</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/><text x="32" y="12.8" font-size="6.8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">LK</text>'},
   {id:'outletW', nm:'防水(WP)',   cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/><text x="20" y="15" font-size="6" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">WP</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/><text x="32" y="12.8" font-size="6.8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">WP</text>'},
   {id:'outlet2P',nm:'200V(2P)',   cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/><text x="20" y="15.5" font-size="6.5" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">2P</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/><text x="32" y="12.8" font-size="6.8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">2P</text>'},
   {id:'outlet3P',nm:'動力3P',     cat:'コンセント', color:'#3F72C4',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 20 A10 10 0 0 0 30 20 Z" fill="currentColor"/><text x="20" y="15.5" font-size="6.5" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">3P</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.6" y1="12.2" x2="16.6" y2="27.8" stroke="currentColor" stroke-width="1.6"/><line x1="23.4" y1="12.2" x2="23.4" y2="27.8" stroke="currentColor" stroke-width="1.6"/><path d="M10.8 24 A10 10 0 0 0 29.2 24 Z" fill="currentColor"/><text x="32" y="12.8" font-size="6.8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">3P</text>'},
   {id:'outletF', nm:'床コンセント',cat:'コンセント', color:'#3F72C4',
-   g:'<rect x="9" y="9" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="20" cy="20" r="7.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12.5 20 A7.5 7.5 0 0 0 27.5 20 Z" fill="currentColor"/>'},
+   g:'<circle cx="20" cy="18" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="16.9" y1="10.8" x2="16.9" y2="25.2" stroke="currentColor" stroke-width="1.5"/><line x1="23.1" y1="10.8" x2="23.1" y2="25.2" stroke="currentColor" stroke-width="1.5"/><path d="M15.5 30 L24.5 30 L20 37 Z" fill="currentColor"/>'},
 
   // ---- 点滅器（スイッチ）●ベース ----
   {id:'sw',      nm:'単極SW',     cat:'スイッチ', color:'#8B5CF6',
@@ -867,19 +867,19 @@ const SYMBOLS = [
   {id:'swW',     nm:'防水SW(WP)',  cat:'スイッチ', color:'#8B5CF6',
    g:'<circle cx="20" cy="20" r="7" fill="currentColor"/><text x="30" y="14" font-size="6" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">WP</text>'},
   {id:'swAuto',  nm:'熱線自動SW',  cat:'スイッチ', color:'#8B5CF6',
-   g:'<path d="M20 11 L30 29 L10 29 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><text x="20" y="27" font-size="8" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">S</text>'},
+   g:'<circle cx="19" cy="21" r="7" fill="currentColor"/><text x="30" y="15" font-size="6.6" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">RAS</text>'},
 
   // ---- 盤・機器 ----
   {id:'panelD',  nm:'分電盤',     cat:'盤・機器', color:'#8A93A3',
    g:'<rect x="7" y="13" width="26" height="14" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 27 L33 13 L33 27 Z" fill="currentColor"/>'},
   {id:'panelH',  nm:'配電盤',     cat:'盤・機器', color:'#8A93A3',
-   g:'<rect x="7" y="13" width="26" height="14" fill="currentColor"/>'},
+   g:'<rect x="7" y="13" width="26" height="14" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 13 L33 27 M33 13 L7 27" stroke="currentColor" stroke-width="1.6" fill="none"/>'},
   {id:'panelC',  nm:'制御盤',     cat:'盤・機器', color:'#8A93A3',
-   g:'<rect x="7" y="13" width="26" height="14" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="9" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">C</text>'},
+   g:'<rect x="7" y="13" width="26" height="14" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M7 13 L20 20 L7 27 Z" fill="currentColor"/><path d="M33 13 L20 20 L33 27 Z" fill="currentColor"/>'},
   {id:'motor',   nm:'電動機(M)',   cat:'盤・機器', color:'#26C6DA',
    g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="11" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">M</text>'},
   {id:'fan',     nm:'換気扇',     cat:'盤・機器', color:'#26C6DA',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M13 13 L27 27 M27 13 L13 27" stroke="currentColor" stroke-width="1.8"/><circle cx="20" cy="20" r="2.6" fill="currentColor"/>'},
+   g:'<circle cx="15.5" cy="20" r="7.5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="24.5" cy="20" r="7.5" fill="none" stroke="currentColor" stroke-width="2.2"/>'},
 
   // ---- 弱電・情報・防災 ----
   {id:'lan',     nm:'情報(LAN)',   cat:'弱電・防災', color:'#4ADE80',
@@ -889,23 +889,25 @@ const SYMBOLS = [
   {id:'tel',     nm:'電話(T)',     cat:'弱電・防災', color:'#4ADE80',
    g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="11" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">T</text>'},
   {id:'smoke',   nm:'煙感知器(S)', cat:'弱電・防災', color:'#F87171',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="10" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">S</text>'},
-  {id:'heat',    nm:'熱感知器',    cat:'弱電・防災', color:'#F87171',
-   g:'<rect x="10" y="10" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"/>'},
+   g:'<rect x="10" y="10" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="10" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">S</text>'},
+  {id:'heat',    nm:'熱感知器(差動式)',cat:'弱電・防災', color:'#F87171',
+   g:'<path d="M10 25 A10 10 0 0 1 30 25 Z" fill="none" stroke="currentColor" stroke-width="2.2"/>'},
   {id:'callP',   nm:'発信機(P)',   cat:'弱電・防災', color:'#F87171',
-   g:'<circle cx="20" cy="20" r="10" fill="currentColor"/><text x="20" y="24.5" font-size="11" text-anchor="middle" fill="#12151a" font-family="sans-serif" font-weight="700">P</text>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="11" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">P</text>'},
   {id:'ind',     nm:'表示灯',      cat:'弱電・防災', color:'#F87171',
-   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M13 13 L27 27 M27 13 L13 27" stroke="currentColor" stroke-width="2.2"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M20 10 A10 10 0 0 0 20 30 Z" fill="currentColor"/>'},
   {id:'bell',    nm:'ベル',        cat:'弱電・防災', color:'#F87171',
-   g:'<path d="M10 22 A10 10 0 0 1 30 22 Z" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="10" y1="22" x2="30" y2="22" stroke="currentColor" stroke-width="2.2"/>'},
+   g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24.5" font-size="11" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">B</text>'},
 
   // ---- 配線・接続材 ----
   {id:'jb',      nm:'ジョイントBOX',cat:'配線・接続', color:'#9AA0AA',
+   g:'<rect x="11" y="11" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"/>'},
+  {id:'cablejb', nm:'ケーブル用JB',cat:'配線・接続', color:'#9AA0AA',
    g:'<circle cx="20" cy="20" r="10" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M14 26 L20 14 M18 27 L24 15 M22 27 L28 17" stroke="currentColor" stroke-width="1.6"/>'},
   {id:'ob',      nm:'アウトレットBOX',cat:'配線・接続', color:'#9AA0AA',
    g:'<rect x="10" y="10" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2"/>'},
   {id:'pb',      nm:'プルボックス', cat:'配線・接続', color:'#9AA0AA',
-   g:'<rect x="8" y="11" width="24" height="18" fill="none" stroke="currentColor" stroke-width="2.2"/><text x="20" y="24" font-size="7" text-anchor="middle" fill="currentColor" font-family="sans-serif" font-weight="700">PB</text>'},
+   g:'<rect x="9" y="9" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M9 9 L31 31 M31 9 L9 31" stroke="currentColor" stroke-width="1.7" fill="none"/>'},
   {id:'riser',   nm:'立上り',      cat:'配線・接続', color:'#9AA0AA',
    g:'<circle cx="20" cy="24" r="4" fill="currentColor"/><path d="M20 22 L20 10 M20 10 l-3 4 M20 10 l3 4" stroke="currentColor" stroke-width="2" fill="none"/>'},
 ];
@@ -1501,8 +1503,16 @@ function isLinearType(t){ return LINEAR_TYPES.includes(t); }
 let railLenMm=1000;                                   // 既定 1m（現場で選択）
 function railLenMmOf(p){ return (p&&p.lenMm)||1000; }
 function railLenPx(lenMm){ const px=(mmPerPx!=null)?lenMm/mmPerPx:lenMm/10; return Math.max(24, px); }   // 未較正は 10mm/px の目安。最小24pxで視認・タップ確保
+function railLenPxOut(lenMm){ return (mmPerPx!=null)?lenMm/mmPerPx:lenMm/10; }   // 出力(印刷/CAD)用：画面のタップ確保クランプを外した実長。較正時は px×mmPerPx=lenMm で実寸一致
+const RAIL_BAR_H=4;   // レールバー半太さ(world px)。画面/印刷/CADで共通
+function railBarSegs(lenPx){   // 中心(0,0)基準のレールバー輪郭(矩形)＋等間隔ティックを線分[x1,y1,x2,y2]で返す（CAD用。railBarSVGと同じ寸法・目盛り）
+  const h=RAIL_BAR_H, x0=-lenPx/2, x1=lenPx/2, segs=[[x0,-h,x1,-h],[x1,-h,x1,h],[x1,h,x0,h],[x0,h,x0,-h]];
+  const step=Math.max(14, lenPx/Math.max(2,Math.round(lenPx/22)));
+  for(let x=x0+step; x<x1-1; x+=step) segs.push([x,-h,x,h]);
+  return segs;
+}
 function railBarSVG(lenPx){   // 中心(0,0)基準の可変長レールバー＋等間隔ティック
-  const h=4, x0=-lenPx/2, x1=lenPx/2; let ticks='';
+  const h=RAIL_BAR_H, x0=-lenPx/2, x1=lenPx/2; let ticks='';
   const step=Math.max(14, lenPx/Math.max(2,Math.round(lenPx/22)));   // 目盛り間隔（過密回避）
   for(let x=x0+step; x<x1-1; x+=step) ticks+=`<line x1="${x.toFixed(1)}" y1="${-h}" x2="${x.toFixed(1)}" y2="${h}" stroke="currentColor" stroke-width="1.4"/>`;
   return `<rect x="${x0.toFixed(1)}" y="${-h}" width="${lenPx.toFixed(1)}" height="${h*2}" rx="${h}" fill="none" stroke="currentColor" stroke-width="2.2"/>${ticks}`;
@@ -2659,6 +2669,7 @@ const SYMMAP={
   ind:{cats:['火災報知・ガス漏れ'],kw:['表示灯'],unit:'個'},
   bell:{cats:['火災報知・ガス漏れ'],kw:['警報ベル'],unit:'個'},
   jb:{cats:['スイッチ・コンセント','ボックス・貫通処理'],kw:['ジョイントボックス'],unit:'個'},
+  cablejb:{cats:['ボックス・貫通処理'],kw:['ケーブル用ジョイントボックス','ジョイントボックス'],unit:'個'},
   ob:{cats:['ボックス・貫通処理'],kw:['アウトレットボックス'],unit:'個'},
   pb:{cats:['ボックス・貫通処理'],kw:['プルボックス'],unit:'個'},
   riser:null,   // 立上り＝配線付随。品目化しない
@@ -3460,6 +3471,13 @@ function buildCadEntities(){
     const rot=(p.rot||0)*Math.PI/180, cs=Math.cos(rot), sn=Math.sin(rot);
     const X=(u,v)=>{ const lx=u-20, ly=v-20;
       return [ (p.x+lx*cs-ly*sn)*mm, -(p.y+lx*sn+ly*cs)*mm ]; };   // Y反転=鏡映1回
+    if(isLinearType(p.type)){   // 線状シンボル(レール)：固定アイコンでなく選択長の可変長バーを実寸で出力
+      for(const [ax,ay,bx,by] of railBarSegs(railLenPxOut(railLenMmOf(p)))){
+        const A=X(ax+20,ay+20), B=X(bx+20,by+20);   // seg は中心0基準→X() のローカル20中心へ寄せる
+        addLine(A[0],A[1],B[0],B[1],lname,lidx,col);
+      }
+      continue;
+    }
     const prims=symbolIR(p.type);
     // 「抜き」傍記(画面では背景色#12151aで白抜きに見える)を持つ記号は、
     // 単色CADで傍記が塗りに埋もれないよう塗りを省略し輪郭＋傍記で表現する
@@ -3588,7 +3606,13 @@ function printInk(c){  // 白背景で見えない明色（盤・機器の#EDEBE
 function printRect(){  // 用紙範囲∪配置範囲（回転40×40シンボルの外接≒28px余裕）∪注記範囲
   let x0=0, y0=0, x1=baseW, y1=baseH;
   const M=28;
-  placed.forEach(p=>{ x0=Math.min(x0,p.x-M); x1=Math.max(x1,p.x+M); y0=Math.min(y0,p.y-M); y1=Math.max(y1,p.y+M); });
+  placed.forEach(p=>{
+    if(isLinearType(p.type)){   // 線状(レール)：半長ぶん外接を広げないと長いレールが印刷でクリップされる
+      const hw=railLenPxOut(railLenMmOf(p))/2, r=(p.rot||0)*Math.PI/180;
+      const ex=Math.abs(hw*Math.cos(r))+8, ey=Math.abs(hw*Math.sin(r))+8;
+      x0=Math.min(x0,p.x-ex); x1=Math.max(x1,p.x+ex); y0=Math.min(y0,p.y-ey); y1=Math.max(y1,p.y+ey);
+    } else { x0=Math.min(x0,p.x-M); x1=Math.max(x1,p.x+M); y0=Math.min(y0,p.y-M); y1=Math.max(y1,p.y+M); }
+  });
   texts.forEach(t=>{ const m=textW(t)/2+t.size; x0=Math.min(x0,t.x-m); x1=Math.max(x1,t.x+m); y0=Math.min(y0,t.y-m); y1=Math.max(y1,t.y+m); });
   freelines.forEach(f=>f.pts.forEach(p=>{ x0=Math.min(x0,p[0]); x1=Math.max(x1,p[0]); y0=Math.min(y0,p[1]); y1=Math.max(y1,p[1]); }));
   return {vx:Math.floor(x0), vy:Math.floor(y0), vw:Math.ceil(x1-x0), vh:Math.ceil(y1-y0)};
@@ -3614,6 +3638,8 @@ function buildPrintSVG(){
   const uses=placed.map(p=>{
     const s=symById(p.type); if(!s) return '';
     if(!layerVisible(p.layer)) return '';                   // 非表示レイヤーは印刷しない
+    if(isLinearType(p.type))                                // 線状(レール)：選択長の可変長バーで印刷（固定アイコンにしない）
+      return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(colorOf(p.type))}">${railBarSVG(railLenPxOut(railLenMmOf(p)))}</g>`;
     return `<g transform="translate(${p.x},${p.y}) rotate(${p.rot||0})" style="color:${printInk(colorOf(p.type))}"><g transform="translate(-20,-20)"><use href="#sym-${p.type}"/></g></g>`;
   }).join('');
   const flg=(layerVisible('draw')?freelines:[]).map(f=>`<path d="M ${f.pts.map(p=>p.join(' ')).join(' L ')}" fill="none" stroke="#333" stroke-width="1.4"/>`).join('');
@@ -3935,7 +3961,7 @@ let toastT=null;
 function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),1800); }
 
 // ============ バージョン ============
-const APP_VERSION='0.32', APP_DATE='2026-07-10';
+const APP_VERSION='0.37', APP_DATE='2026-07-10';
 el('appsub').textContent=`試作 α v${APP_VERSION}`;
 el('appsub').title=`更新日 ${APP_DATE}`;
 { const uv=el('uploader-ver'); if(uv) uv.textContent=`v${APP_VERSION}（${APP_DATE}）`; }
